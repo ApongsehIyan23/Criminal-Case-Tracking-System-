@@ -33,16 +33,18 @@ export const setSessionLostHandler = (handler) => { onSessionLost = handler; };
 
 async function send(method, path, { body, auth = true, keepalive = false } = {}) {
   const token = auth ? tokenStore.get() : null;
+  const multipart = body instanceof FormData;
+  const payloadBody = multipart ? body : JSON.stringify(body);
   let response;
   try {
     response = await fetch(`/api${path}`, {
       method,
       keepalive,
       headers: {
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...(body && !multipart ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? payloadBody : undefined,
     });
   } catch {
     throw new ApiError(0, { error: 'NETWORK' });

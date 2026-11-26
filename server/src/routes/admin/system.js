@@ -4,7 +4,7 @@ const { logAudit } = require('../../services/audit');
 
 const HISTORY_LIMIT = 10;
 
-function createSystemRouter({ db, mailer, neon }) {
+function createSystemRouter({ db, mailer, neon, storage }) {
   const router = express.Router();
 
   router.get('/health', async (req, res) => {
@@ -22,9 +22,10 @@ function createSystemRouter({ db, mailer, neon }) {
                 OR has_table_privilege(current_user, 'audit_logs', 'TRUNCATE')) AS ok`,
     );
     checks.push({ name: 'auditProtection', ok: audit.rows[0].ok });
-    // These two report configuration only; they do not contact the provider.
+    // The last three report configuration only; they do not contact the provider.
     checks.push({ name: 'email', ok: mailer.configured });
     checks.push({ name: 'backups', ok: neon.configured });
+    checks.push({ name: 'storage', ok: storage.configured });
 
     await logAudit(db, { actor: req.user, actionType: 'SYSTEM_HEALTH_VIEWED', ip: req.ip });
     res.json({

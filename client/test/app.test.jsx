@@ -80,7 +80,7 @@ describe('sign in and routing', () => {
     signedIn();
     mockApi({ 'GET /api/auth/me': { user: { ...ADMIN, role: 'JUDICIAL_POLICE_OFFICER' } } });
     open('/admin');
-    expect(await screen.findByRole('heading', { name: 'Judicial Police dashboard' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Case Dashboard' })).toBeInTheDocument();
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
   });
 });

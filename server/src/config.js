@@ -14,6 +14,12 @@ function loadConfig(env = process.env) {
     neonApiKey: env.NEON_API_KEY || '',
     neonProjectId: env.NEON_PROJECT_ID || '',
     neonBranchId: env.NEON_BRANCH_ID || '',
+    storageEndpoint: env.STORAGE_ENDPOINT || '',
+    storageRegion: env.STORAGE_REGION || 'us-east-2',
+    storageAccessKeyId: env.STORAGE_ACCESS_KEY_ID || '',
+    storageSecretAccessKey: env.STORAGE_SECRET_ACCESS_KEY || '',
+    storageBucket: env.STORAGE_BUCKET || '',
+    evidenceKey: env.EVIDENCE_ENCRYPTION_KEY || '',
     port: Number(env.PORT) || 3001,
   };
 }

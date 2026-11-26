@@ -4,13 +4,14 @@ import Pagination from '../../components/Pagination';
 import { Field, FormError, Icon, PageHeader } from '../../components/ui';
 import { useLanguage } from '../../context/LanguageContext';
 import { api, query } from '../../lib/api';
+import { useDraft } from '../../lib/useDraft';
 
 const NO_FILTERS = { search: '', actionType: '', from: '', to: '' };
 
 export default function AuditTab() {
   const { t, language, formatDateTime } = useLanguage();
-  const [filters, setFilters] = useState(NO_FILTERS);
-  const [view, setView] = useState({ filters: NO_FILTERS, page: 1, pageSize: 5, asOf: '', version: 0 });
+  const [filters, setFilters] = useDraft('admin.audit.filters', NO_FILTERS);
+  const [view, setView] = useState(() => ({ filters, page: 1, pageSize: 5, asOf: '', version: 0 }));
   const [data, setData] = useState(null);
   const [actionTypes, setActionTypes] = useState([]);
   const [error, setError] = useState(null);

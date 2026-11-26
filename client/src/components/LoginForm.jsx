@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useDraft } from '../lib/useDraft';
 import { Field, FormError, Icon, PasswordField } from './ui';
 
 export default function LoginForm() {
   const { t } = useLanguage();
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
+  // The email survives a refresh; the password is never stored.
+  const [email, setEmail] = useDraft('login.email', '');
   const [password, setPassword] = useState('');
   const [fields, setFields] = useState({});
   const [formError, setFormError] = useState(null);

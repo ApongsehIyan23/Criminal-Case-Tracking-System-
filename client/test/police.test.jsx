@@ -1,0 +1,186 @@
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach, describe, expect, test, vi } from 'vitest';
+import App from '../src/App';
+
+const OFFICER = {
+  userId: 'p1', email: 'officer@ccts.test', fullName: 'Paul Officer',
+  role: 'JUDICIAL_POLICE_OFFICER', preferredLanguage: 'EN',
+};
+const NOW = '2026-11-01T10:00:00.000Z';
+const later = (hours) => new Date(Date.parse(NOW) + hours * 3600000).toISOString();
+
+const card = (n, hours) => ({
+  timerId: `t${n}`, caseId: `CM-MFD-2026-000${n}`, suspectName: `Suspect ${n}`, nationalId: `ID${n}`, unitName: 'Station',
+  incidentTitle: 'Theft', narrative: null, status: 'IN_INVESTIGATION', timerStatus: 'ACTIVE', expiresAt: later(hours),
+  alertSent: false, evidenceCount: 0, participantCount: 1,
+});
+
+const docket = (status = 'IN_INVESTIGATION', mandate = null) => ({
+  case: {
+    caseId: 'CM-MFD-2026-0001', incidentTitle: 'Theft', status, offenseEn: 'Theft', offenseFr: 'Vol',
+    incidentDatetime: NOW, unitName: 'Station', createdBy: 'Paul', narrative: 'Story',
+  },
+  participants: [], evidence: [], evidenceLimitBytes: 512000, mandate, alerts: [], trail: [], serverNow: NOW,
+});
+
+function mockApi(overrides = {}) {
+  const calls = [];
+  const routes = {
+    'GET /api/auth/me': { user: OFFICER },
+    'GET /api/notifications': { items: [] },
+    'GET /api/cases/dashboard': { custody: [card(1, 1.5), card(2, 10), card(3, 20), card(4, 30)], totalCases: 7, serverNow: NOW },
+    'GET /api/cases': { items: [], total: 7, serverNow: NOW },
+    'GET /api/cases/reference': {
+      offenses: [{ offenseCategoryId: 'o1', labelEn: 'Theft', labelFr: 'Vol' }],
+      units: [{ unitId: 'u1', unitName: 'Central Station' }], officerUnitId: 'u1',
+    },
+    ...overrides,
+  };
+  vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+    const key = `${options.method} ${url.split('?')[0]}`;
+    calls.push({ key, url, body: options.body });
+    const { status = 200, ...body } = routes[key] || {};
+    return new Response(JSON.stringify(body), { status });
+  }));
+  return calls;
+}
+
+const signIn = () => {
+  sessionStorage.setItem('ccts.token', 'token');
+  sessionStorage.setItem('ccts.deadline', String(Date.now() + 900000));
+};
+const open = (path) => render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>);
+const button = (name) => screen.getByRole('button', { name });
+const type = (label, value, index = 0) => fireEvent.change(screen.getAllByLabelText(label)[index], { target: { value } });
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('P1 dashboard', () => {
+  test('Pattern A: three custody cards per page, red only under 2 hours', async () => {
+    signIn();
+    const calls = mockApi();
+    open('/police');
+    const cards = await screen.findAllByTestId('custody-card');
+    expect(cards).toHaveLength(3);
+    expect(within(cards[0]).getByText('Expires < 2h')).toBeInTheDocument();
+    expect(cards[0].innerHTML).toContain('text-red-500');
+    expect(cards[1].innerHTML).not.toContain('red-');
+    fireEvent.click(button('Next'));
+    expect(screen.getAllByTestId('custody-card')).toHaveLength(1);
+    expect(screen.getByText('Showing 4–4 of 4')).toBeInTheDocument();
+    expect(calls.some((c) => c.key === 'POST /api/custody/sync')).toBe(true);
+  });
+
+  test('the register is collapsed, opens on typing and returns to page 1', async () => {
+    signIn();
+    const calls = mockApi();
+    open('/police');
+    await screen.findByRole('button', { name: 'Show All Cases (7)' });
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(calls.some((c) => c.key === 'GET /api/cases')).toBe(false);
+    type('Search cases', 'vol');
+    expect(await screen.findByRole('table')).toBeInTheDocument();
+    await waitFor(() => expect(calls.at(-1).url).toContain('search=vol&page=1'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Page 2' }));
+    await waitFor(() => expect(calls.at(-1).url).toContain('page=2'));
+    type('Search cases', 'vols');
+    await waitFor(() => expect(calls.at(-1).url).toContain('search=vols&page=1'));
+  });
+});
+
+describe('P2 case initiation', () => {
+  test('blocks a detained suspect without an ID using the exact message', async () => {
+    signIn();
+    const calls = mockApi();
+    open('/police/cases/new');
+    await screen.findByLabelText('Incident Title');
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(button('Save & Create Case Docket'));
+    expect(screen.getByText('Suspect National ID is required to initiate a custody timer')).toBeInTheDocument();
+    expect(calls.some((c) => c.key === 'POST /api/cases')).toBe(false);
+  });
+
+  test('keeps everything typed across a page refresh', async () => {
+    signIn();
+    mockApi();
+    const first = open('/police/cases/new');
+    await screen.findByLabelText('Incident Title');
+    type('Incident Title', 'Market theft');
+    type('Incident Narrative', 'Sac volé');
+    type('Full Name', 'Jean Doe');
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(button('Add Another Participant'));
+    type('Full Name', 'Rose', 1);
+    first.unmount();
+
+    open('/police/cases/new');
+   await screen.findByLabelText('Incident Title');
+    expect(await screen.findByDisplayValue('Market theft')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Sac volé')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Full Name').map((i) => i.value)).toEqual(['Jean Doe', 'Rose']);
+    expect(screen.getByRole('checkbox')).toBeChecked();
+  });
+
+  test('cancel discards the draft, and logging out clears all drafts', async () => {
+    signIn();
+    mockApi({ 'POST /api/auth/logout': {} });
+    open('/police/cases/new');
+    await screen.findByLabelText('Incident Title');
+    type('Incident Title', 'Temporary');
+    fireEvent.click(button('Cancel'));
+    fireEvent.click(await screen.findByRole('link', { name: 'Log New Case' }));
+    expect(screen.getByLabelText('Incident Title')).toHaveValue('');
+    type('Incident Title', 'Again');
+    fireEvent.click(button('Log Out'));
+    await screen.findByRole('heading', { name: 'Sign in' });
+    expect(Object.keys(sessionStorage).filter((k) => k.includes('.p1.'))).toEqual([]);
+  });
+
+  test('passwords are never stored, and another user does not see drafts', async () => {
+    sessionStorage.setItem('ccts.draft.someone.police.newCase', '{"incidentTitle":"secret"}');
+    mockApi({ 'POST /api/auth/login': { token: 't', sessionMinutes: 15, user: OFFICER } });
+    open('/login');
+    type('Email address', 'officer@ccts.test');
+    type('Password', 'Very-secret-123');
+    expect(JSON.stringify({ ...sessionStorage })).not.toContain('Very-secret-123');
+    fireEvent.click(button('Sign in'));
+    await screen.findByRole('heading', { name: 'Case Dashboard' });
+    expect(sessionStorage.getItem('ccts.draft.someone.police.newCase')).toBeNull();
+    expect(sessionStorage.getItem('ccts.draft.guest.login.email')).toBeNull();
+  });
+});
+
+describe('P3 docket', () => {
+  test('shows four tabs and opens the review before transmitting', async () => {
+    signIn();
+    const calls = mockApi({
+      'GET /api/cases/CM-MFD-2026-0001': docket(),
+      'GET /api/cases/CM-MFD-2026-0001/transmission-review': docket(),
+      'POST /api/cases/CM-MFD-2026-0001/transmit': {},
+    });
+    open('/police/cases/CM-MFD-2026-0001');
+    expect(await screen.findAllByRole('tab')).toHaveLength(4);
+    fireEvent.click(button('Transmit Case to Magistrate'));
+    const dialog = screen.getByRole('dialog');
+    const confirm = within(dialog).getByRole('button', { name: 'Confirm & Transmit' });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    expect(calls.some((c) => c.key.endsWith('/transmit'))).toBe(false);
+    fireEvent.click(confirm);
+    expect(await screen.findByText('The case was transmitted to the examining magistrate.')).toBeInTheDocument();
+  });
+
+  test('a transmitted case is read-only and shows the returned ruling', async () => {
+    signIn();
+    mockApi({
+      'GET /api/cases/CM-MFD-2026-0001': docket('MANDATE_ISSUED', {
+        decision: 'RELEASE', rulingNotes: 'Libération ordonnée', issuedBy: 'Judge', issuedAt: NOW,
+      }),
+    });
+    open('/police/cases/CM-MFD-2026-0001?tab=evidence');
+    expect(await screen.findByText('Returned Judicial Mandate Ruling')).toBeInTheDocument();
+    expect(screen.getByText('Libération ordonnée')).toBeInTheDocument();
+    expect(screen.getByText('Evidence locked after transmission')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Upload|Transmit/ })).not.toBeInTheDocument();
+  });
+});

@@ -2,6 +2,7 @@ const { Client } = require('pg');
 const request = require('supertest');
 const { createApp } = require('../src/app');
 const { createDb } = require('../src/db');
+const { createStorage } = require('../src/services/storage');
 const { migrate } = require('../scripts/migrate');
 const { seedAdmin } = require('../scripts/seedAdmin');
 const { seedReference } = require('../scripts/seedReference');
@@ -50,7 +51,27 @@ async function setup() {
 
   const db = createDb(appUrl);
   const config = { jwtSecret: 'test-secret-that-is-at-least-32-characters', appBaseUrl: 'http://app.test' };
-  const app = createApp({ db, config, mailer, neon });
+  // The real storage service (and its encryption) over an in-memory bucket.
+  const bucket = new Map();
+  const s3 = {
+    failNext: false,
+    async send(command) {
+      if (this.failNext) {
+        this.failNext = false;
+        throw new Error('Simulated storage outage');
+      }
+      const { Key, Body } = command.input;
+      if (command.constructor.name === 'PutObjectCommand') {
+        bucket.set(Key, Body);
+        return {};
+      }
+      return { Body: { transformToByteArray: async () => bucket.get(Key) } };
+    },
+  };
+  const storage = createStorage({
+    storageBucket: 'test-bucket', evidenceKey: Buffer.alloc(32, 7).toString('base64'),
+  }, s3);
+  const app = createApp({ db, config, mailer, neon, storage });
   const api = request(app);
 
   const login = async (email = ADMIN.email, password = ADMIN.password) => {
@@ -70,7 +91,7 @@ async function setup() {
     (await owner.query('SELECT count(*)::int AS n FROM audit_logs WHERE action_type = $1', [actionType])).rows[0].n;
 
   return {
-    owner, db, app, api, config, mailer, neon, sent, login, as, tokenFrom, auditCount,
+    owner, db, app, api, config, mailer, neon, storage, s3, bucket, sent, login, as, tokenFrom, auditCount,
     async close() {
       await db.close();
       await owner.end();
