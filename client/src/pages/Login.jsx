@@ -12,10 +12,11 @@ export default function Login() {
 
   if (status === 'active') return <Navigate to={homeFor(user.role)} replace />;
 
+  const message = (state?.activated && t('login.activated')) || (status === 'expired' && t('login.expired'));
+
   return (
-    <AuthShell title={t('login.title')}>
-      {state?.activated && <Notice icon="circle-check">{t('login.activated')}</Notice>}
-      {status === 'expired' && <Notice icon="clock">{t('login.expired')}</Notice>}
+    <AuthShell title={t('login.title')}
+      banner={message && <Notice className="mb-4" title={t('common.confirmation')}>{message}</Notice>}>
       <LoginForm />
     </AuthShell>
   );

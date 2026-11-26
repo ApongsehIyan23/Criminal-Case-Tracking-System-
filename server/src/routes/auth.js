@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 const express = require('express');
 const { BCRYPT_COST, HOME_BY_ROLE, SESSION_MINUTES } = require('../constants');
 const { ApiError } = require('../errors');
-const { bearerToken, expireIfIdle } = require('../middleware/auth');
+const { bearerToken, endExpiredSession } = require('../middleware/auth');
 const { logAudit, ANONYMOUS_ACTOR } = require('../services/audit');
 const { signToken, verifyToken } = require('../services/session');
 const { passwordProblem } = require('../validation');
@@ -12,8 +12,8 @@ const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex'
 // Compared against when there is no account, so response time does not reveal which emails exist.
 const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), BCRYPT_COST);
 
-// The browser countdown may run slightly ahead of the last activity the server saw.
-const CLIENT_EXPIRY_MINUTES = SESSION_MINUTES - 1;
+// The browser countdown may reach zero slightly before the server's token expires.
+const EXPIRY_TOLERANCE_SECONDS = 60;
 
 const publicUser = (u) => ({
   userId: u.userId,
@@ -84,28 +84,25 @@ function createAuthRouter({ db, config, auth }) {
     res.json({ user: publicUser(req.user) });
   });
 
-  // Heartbeat sent while the user interacts with the page without calling the API.
-  router.post('/activity', auth.authenticate, (req, res) => res.status(204).end());
-
   router.post('/logout', auth.authenticate, async (req, res) => {
     await db.transaction(async (client) => {
       await client.query('UPDATE users SET last_activity_at = NULL WHERE user_id = $1', [req.user.userId]);
       await logAudit(client, { actor: req.user, actionType: 'USER_LOGOUT', ip: req.ip });
     });
-    res.removeHeader('X-Session-Token');
     res.status(204).end();
   });
 
-  // Called when the browser countdown reaches zero. Accepts an expired token, and does
-  // nothing if the account has been active elsewhere in the meantime.
+  // Called when the browser countdown reaches zero. Accepts an expired token.
   router.post('/session-expired', async (req, res) => {
-    let userId;
+    let session;
     try {
-      userId = verifyToken(bearerToken(req) || '', config.jwtSecret, { ignoreExpiration: true }).sub;
+      session = verifyToken(bearerToken(req) || '', config.jwtSecret, { ignoreExpiration: true });
     } catch {
       throw new ApiError(401, 'NOT_AUTHENTICATED');
     }
-    await expireIfIdle(db, userId, CLIENT_EXPIRY_MINUTES, req.ip);
+    if (session.exp - Date.now() / 1000 <= EXPIRY_TOLERANCE_SECONDS) {
+      await endExpiredSession(db, session, req.ip);
+    }
     res.status(204).end();
   });
 

@@ -1,11 +1,20 @@
 // The token lives in sessionStorage so it disappears when the tab closes,
 // which matters on shared station computers.
 const TOKEN_KEY = 'ccts.token';
+const DEADLINE_KEY = 'ccts.deadline';
 
 export const tokenStore = {
   get: () => sessionStorage.getItem(TOKEN_KEY),
-  set: (token) => sessionStorage.setItem(TOKEN_KEY, token),
-  clear: () => sessionStorage.removeItem(TOKEN_KEY),
+  // The deadline is fixed at sign-in, measured on this computer's own clock.
+  set: (token, minutes) => {
+    sessionStorage.setItem(TOKEN_KEY, token);
+    sessionStorage.setItem(DEADLINE_KEY, String(Date.now() + minutes * 60 * 1000));
+  },
+  deadline: () => Number(sessionStorage.getItem(DEADLINE_KEY)) || 0,
+  clear: () => {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(DEADLINE_KEY);
+  },
 };
 
 export class ApiError extends Error {
@@ -38,10 +47,6 @@ async function send(method, path, { body, auth = true, keepalive = false } = {})
   } catch {
     throw new ApiError(0, { error: 'NETWORK' });
   }
-
-  // Sliding session: adopt the refreshed token, unless the session ended meanwhile.
-  const refreshed = response.headers.get('X-Session-Token');
-  if (refreshed && token && tokenStore.get()) tokenStore.set(refreshed);
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));

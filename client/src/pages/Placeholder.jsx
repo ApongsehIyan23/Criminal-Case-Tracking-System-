@@ -5,10 +5,12 @@ import { useLanguage } from '../context/LanguageContext';
 export default function Placeholder({ area, icon }) {
   const { t } = useLanguage();
   return (
-    <section className="card text-center">
-      <Icon name={icon} className="text-3xl" />
-      <h1 className="mt-2 text-xl font-semibold">{t(`placeholder.${area}`)}</h1>
-      <p className="mt-1 text-sm text-neutral-600">{t('placeholder.body')}</p>
-    </section>
+    <main className="mx-auto max-w-[1440px] p-7">
+      <section className="border border-neutral-300 bg-white p-8 text-center">
+        <Icon name={icon} className="text-3xl text-neutral-500" />
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight">{t(`placeholder.${area}`)}</h1>
+        <p className="mt-1.5 text-sm text-neutral-600">{t('placeholder.body')}</p>
+      </section>
+    </main>
   );
 }

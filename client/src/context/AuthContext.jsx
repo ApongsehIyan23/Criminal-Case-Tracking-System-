@@ -37,7 +37,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const result = await api.post('/auth/login', { email, password }, { auth: false });
-    tokenStore.set(result.token);
+    tokenStore.set(result.token, result.sessionMinutes);
     setLanguage(result.user.preferredLanguage);
     setSession({ status: 'active', user: result.user });
     return result;

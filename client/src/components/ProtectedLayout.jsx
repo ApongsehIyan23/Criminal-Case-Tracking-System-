@@ -21,7 +21,7 @@ export default function ProtectedLayout({ role, children }) {
       {/* Keyed by user: resuming keeps form contents, another account starts clean. */}
       <div key={user.userId} inert={locked}>
         <TopNav />
-        <main className="mx-auto max-w-[1440px] p-7">{children}</main>
+        {children}
       </div>
       {locked && <ReauthModal />}
     </>

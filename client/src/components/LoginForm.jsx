@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Field, FormError, Icon } from './ui';
+import { Field, FormError, Icon, PasswordField } from './ui';
 
-export default function LoginForm({ initialEmail = '', onSuccess }) {
+export default function LoginForm() {
   const { t } = useLanguage();
   const { login } = useAuth();
-  const [email, setEmail] = useState(initialEmail);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fields, setFields] = useState({});
   const [formError, setFormError] = useState(null);
@@ -22,8 +22,7 @@ export default function LoginForm({ initialEmail = '', onSuccess }) {
     if (Object.keys(problems).length) return;
     setBusy(true);
     try {
-      const result = await login(email, password);
-      onSuccess?.(result);
+      await login(email, password);
     } catch (error) {
       setFields(error.fields || {});
       setFormError(error.code || 'SERVER_ERROR');
@@ -32,17 +31,17 @@ export default function LoginForm({ initialEmail = '', onSuccess }) {
   }
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-4">
-      <Field label={t('login.email')} error={fields.email}>
-        {(props) => <input {...props} type="email" autoComplete="username" value={email}
-          onChange={(e) => setEmail(e.target.value)} />}
-      </Field>
-      <Field label={t('login.password')} error={fields.password}>
-        {(props) => <input {...props} type="password" autoComplete="current-password" value={password}
-          onChange={(e) => setPassword(e.target.value)} />}
-      </Field>
-      {formError !== 'VALIDATION_FAILED' && <FormError code={formError} />}
-      <button type="submit" className="btn btn-primary w-full" disabled={busy}>
+    <form onSubmit={submit} noValidate>
+      <div className="space-y-5">
+        <Field label={t('login.email')} error={fields.email}>
+          {(props) => <input {...props} type="email" autoComplete="username" value={email}
+            onChange={(e) => setEmail(e.target.value)} />}
+        </Field>
+        <PasswordField label={t('login.password')} error={fields.password} autoComplete="current-password"
+          value={password} onChange={setPassword} />
+      </div>
+      {formError !== 'VALIDATION_FAILED' && <FormError code={formError} className="mt-3" />}
+      <button type="submit" className="button-primary mt-6 w-full" disabled={busy}>
         <Icon name={busy ? 'spinner fa-spin' : 'right-to-bracket'} />
         {t('login.submit')}
       </button>

@@ -15,23 +15,29 @@ export default function HelpPanel({ role, onClose }) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-30">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+    <div className="fixed inset-0 z-40 bg-black/20"
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <aside role="dialog" aria-modal="true" aria-label={t('help.title')}
-        className="absolute inset-y-0 right-0 w-full max-w-md overflow-y-auto border-l border-neutral-200 bg-white p-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 text-lg font-semibold"><Icon name="circle-question" />{t('help.title')}</h2>
-          <button ref={closeButton} type="button" className="btn" onClick={onClose}>
-            <Icon name="xmark" />{t('common.close')}
+        className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-neutral-400 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-neutral-300 p-5">
+          <div>
+            <h2 className="text-lg font-semibold"><Icon name="circle-question" className="mr-2" />{t('help.title')}</h2>
+            <p className="mt-1 text-xs text-neutral-500">{t(`roles.${role}`)}</p>
+          </div>
+          <button ref={closeButton} type="button" className="text-xl" onClick={onClose}
+            aria-label={t('common.close')} title={t('common.close')}>
+            <Icon name="xmark" />
           </button>
         </div>
-        <p className="mb-3 text-sm text-neutral-600">{t(`roles.${role}`)}</p>
-        {t(`help.${role}`).map(([question, answer]) => (
-          <details key={question} className="border-b border-neutral-200 py-3">
-            <summary className="cursor-pointer text-sm font-medium">{question}</summary>
-            <p className="mt-2 text-sm text-neutral-700">{answer}</p>
-          </details>
-        ))}
+        <div className="space-y-7 overflow-y-auto p-6">
+          {t(`help.${role}`).map(([question, answer], index) => (
+            <section key={question}>
+              <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-full border border-neutral-400 text-sm font-semibold">{index + 1}</div>
+              <h3 className="font-semibold">{question}</h3>
+              <p className="mt-2 text-sm leading-6 text-neutral-600">{answer}</p>
+            </section>
+          ))}
+        </div>
       </aside>
     </div>
   );
