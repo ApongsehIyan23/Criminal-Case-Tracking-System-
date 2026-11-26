@@ -48,4 +48,27 @@ function invitationEmail({ to, fullName, link, language }) {
   return { to, subject: 'CCTS: Activate your account / Activez votre compte', text, html };
 }
 
-module.exports = { createSendgridMailer, invitationEmail };
+// Carries the case number and deadline only: no personal details in email.
+function custodyAlertEmail({ to, caseId, expiresAt, language, link, timeZone }) {
+  const when = (locale) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone })
+    .format(expiresAt);
+  const passed = expiresAt.getTime() <= Date.now();
+  const blocks = {
+    EN: [passed ? `The custody limit for a suspect on case ${caseId} has passed.`
+      : `A suspect on case ${caseId} is approaching the custody limit.`,
+    `Deadline: ${when('en-GB')} (Cameroon time).`, 'Open CCTS to act on this case'],
+    FR: [passed ? `Le délai de garde à vue d'un suspect dans l'affaire ${caseId} est dépassé.`
+      : `Un suspect de l'affaire ${caseId} approche de la limite de garde à vue.`,
+    `Échéance : ${when('fr-CM')} (heure du Cameroun).`, 'Ouvrez le CCTS pour traiter cette affaire'],
+  };
+  const order = language === 'FR' ? ['FR', 'EN'] : ['EN', 'FR'];
+  return {
+    to,
+    subject: `CCTS: Custody deadline / Échéance de garde à vue - ${caseId}`,
+    text: order.map((l) => `${blocks[l][0]}\n${blocks[l][1]}\n${blocks[l][2]}: ${link}`).join('\n\n----------\n\n'),
+    html: order.map((l) => `<p>${escapeHtml(blocks[l][0])}</p><p>${escapeHtml(blocks[l][1])}</p>`
+      + `<p><a href="${escapeHtml(link)}">${escapeHtml(blocks[l][2])}</a></p>`).join('<hr>'),
+  };
+}
+
+module.exports = { createSendgridMailer, invitationEmail, custodyAlertEmail };

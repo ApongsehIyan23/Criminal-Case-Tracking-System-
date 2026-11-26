@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { homeFor, useAuth } from '../context/AuthContext';
+import { CustodySyncProvider } from '../context/CustodySyncContext';
 import { useLanguage } from '../context/LanguageContext';
 import ReauthModal from './ReauthModal';
 import TopNav from './TopNav';
@@ -21,7 +22,7 @@ export default function ProtectedLayout({ role, children }) {
       {/* Keyed by user: resuming keeps form contents, another account starts clean. */}
       <div key={user.userId} inert={locked}>
         <TopNav />
-        {children}
+        <CustodySyncProvider active={!locked}>{children}</CustodySyncProvider>
       </div>
       {locked && <ReauthModal />}
     </>

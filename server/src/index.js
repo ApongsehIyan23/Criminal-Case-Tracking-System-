@@ -3,6 +3,7 @@ const { loadConfig } = require('./config');
 const { createDb } = require('./db');
 const { createSendgridMailer } = require('./services/email');
 const { createNeonClient } = require('./services/neon');
+const { createStorage } = require('./services/storage');
 
 const config = loadConfig();
 const app = createApp({
@@ -10,6 +11,7 @@ const app = createApp({
   config,
   mailer: createSendgridMailer(config),
   neon: createNeonClient(config),
+  storage: createStorage(config),
 });
 
 app.listen(config.port, (err) => {

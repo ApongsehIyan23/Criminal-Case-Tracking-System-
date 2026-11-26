@@ -16,7 +16,7 @@ describe('system health and backups', () => {
     const res = await admin.get('/api/admin/system/health');
     assert.strictEqual(res.status, 200);
     assert.strictEqual(res.body.healthy, true);
-    assert.deepStrictEqual(res.body.checks.map((c) => c.name), ['database', 'auditProtection', 'email', 'backups']);
+    assert.deepStrictEqual(res.body.checks.map((c) => c.name), ['database', 'auditProtection', 'email', 'backups', 'storage']);
   });
 
   test('a backup creates a snapshot, records it and logs DATABASE_BACKUP', async () => {

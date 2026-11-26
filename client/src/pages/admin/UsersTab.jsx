@@ -3,14 +3,15 @@ import Pagination from '../../components/Pagination';
 import { FormError, Icon, Notice, PageHeader, Toast } from '../../components/ui';
 import { useLanguage } from '../../context/LanguageContext';
 import { api, query } from '../../lib/api';
+import { useDraft } from '../../lib/useDraft';
 import InviteModal from './InviteModal';
 
 export default function UsersTab() {
   const { t } = useLanguage();
-  const [view, setView] = useState({ page: 1, pageSize: 5, version: 0 });
+  const [view, setView] = useDraft('admin.users', { page: 1, pageSize: 5, version: 0 });
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useDraft('admin.invite.open', false);
   const [banner, setBanner] = useState(null);
   const [toast, setToast] = useState(null);
   const [resending, setResending] = useState(null);

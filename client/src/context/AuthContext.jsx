@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api, setSessionLostHandler, tokenStore } from '../lib/api';
+import { draftStore } from '../lib/draftStore';
 import { useLanguage } from './LanguageContext';
 
 const AuthContext = createContext(null);
@@ -38,6 +39,9 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (email, password) => {
     const result = await api.post('/auth/login', { email, password }, { auth: false });
     tokenStore.set(result.token, result.sessionMinutes);
+    draftStore.keepOnly(result.user.userId);
+    draftStore.remove('guest', 'login.email');
+    draftStore.remove(result.user.userId, 'login.email');
     setLanguage(result.user.preferredLanguage);
     setSession({ status: 'active', user: result.user });
     return result;
@@ -48,6 +52,7 @@ export function AuthProvider({ children }) {
       await api.post('/auth/logout');
     } catch { /* the local session is cleared either way */ }
     tokenStore.clear();
+    draftStore.clearAll();
     setSession({ status: 'anonymous', user: null });
   }, []);
 

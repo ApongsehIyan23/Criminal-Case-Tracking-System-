@@ -3,12 +3,15 @@ const { ROLES } = require('./constants');
 const { ApiError } = require('./errors');
 const { createAuthMiddleware } = require('./middleware/auth');
 const { createAuditRouter } = require('./routes/admin/auditLogs');
+const { createCaseRouter } = require('./routes/cases');
+const { createCustodyRouter } = require('./routes/custody');
+const { createCustodyService } = require('./services/custody');
 const { createSystemRouter } = require('./routes/admin/system');
 const { createUserRouter } = require('./routes/admin/users');
 const { createAuthRouter } = require('./routes/auth');
 
 // Dependencies are passed in so tests can substitute the mailer and Neon client.
-function createApp({ db, config, mailer, neon }) {
+function createApp({ db, config, mailer, neon, storage }) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1); // one proxy (Vercel) in front, for the client IP
@@ -25,9 +28,15 @@ function createApp({ db, config, mailer, neon }) {
   const admin = express.Router();
   admin.use(auth.authenticate, auth.requireRole(ROLES.ADMIN));
   admin.use('/audit-logs', createAuditRouter({ db }));
-  admin.use('/system', createSystemRouter({ db, mailer, neon }));
+  admin.use('/system', createSystemRouter({ db, mailer, neon, storage }));
   admin.use(createUserRouter({ db, config, mailer }));
   app.use('/api/admin', admin);
+
+  const custody = createCustodyService({ db, mailer, config });
+  app.use('/api/cases', auth.authenticate, auth.requireRole(ROLES.POLICE), createCaseRouter({ db, storage, custody }));
+  const shared = createCustodyRouter({ db, custody });
+  app.use(['/api/custody', '/api/notifications'], auth.authenticate);
+  app.use('/api', shared);
 
   app.use('/api', () => { throw new ApiError(404, 'NOT_FOUND'); });
 

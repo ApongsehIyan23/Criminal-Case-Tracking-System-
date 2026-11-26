@@ -1,23 +1,24 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Field, FormError, Icon } from '../../components/ui';
 import { useLanguage } from '../../context/LanguageContext';
 import { api } from '../../lib/api';
+import { useDraft } from '../../lib/useDraft';
 
 const ROLES = ['SYSTEM_ADMINISTRATOR', 'JUDICIAL_POLICE_OFFICER', 'EXAMINING_MAGISTRATE'];
 const MAX_ACCOUNTS = 25;
 
 // Batch account creation. Closing the dialog discards what was typed.
-export default function InviteModal({ onClose, onCreated }) {
+export default function InviteModal({ onClose: close, onCreated }) {
   const { t } = useLanguage();
-  const nextKey = useRef(0);
   const blank = () => ({
-    key: nextKey.current++, fullName: '', email: '', role: '', organizationalUnitId: '', preferredLanguage: 'EN',
+    key: crypto.randomUUID(), fullName: '', email: '', role: '', organizationalUnitId: '', preferredLanguage: 'EN',
   });
-  const [rows, setRows] = useState(() => [blank()]);
+  const [rows, setRows, resetRows] = useDraft('admin.invite.rows', () => [blank()]);
   const [units, setUnits] = useState([]);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const onClose = () => { resetRows(); close(); };
 
   useEffect(() => {
     api.get('/admin/units').then((data) => setUnits(data.units)).catch((error) => setFormError(error.code));
@@ -58,6 +59,7 @@ export default function InviteModal({ onClose, onCreated }) {
           ...row, organizationalUnitId: organizationalUnitId || null,
         })),
       });
+      resetRows();
       onCreated(data.created);
     } catch (error) {
       // The server reports problems by row position.
