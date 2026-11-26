@@ -42,7 +42,10 @@ function mockApi(overrides = {}) {
 }
 
 const open = (path) => render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>);
-const signedIn = () => sessionStorage.setItem('ccts.token', 'token');
+const signedIn = (minutes = 15) => {
+  sessionStorage.setItem('ccts.token', 'token');
+  sessionStorage.setItem('ccts.deadline', String(Date.now() + minutes * 60 * 1000));
+};
 const button = (name) => screen.getByRole('button', { name });
 
 afterEach(() => {
@@ -106,30 +109,44 @@ describe('activation', () => {
 });
 
 describe('administration console', () => {
-  test('keeps typed values when the language or tab changes', async () => {
+  test('creates accounts in a dialog, keeping typed values when the language changes', async () => {
     signedIn();
     mockApi({ 'PATCH /api/auth/language': { status: 204 } });
     open('/admin');
-    fireEvent.change(await screen.findByLabelText('Full name'), { target: { value: 'Marie Ngo' } });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Create Account' }));
+    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Marie Ngo' } });
     fireEvent.click(button('Add another account'));
     expect(screen.getAllByLabelText('Full name')).toHaveLength(2);
 
     fireEvent.click(button('FR'));
     expect(screen.getAllByLabelText('Nom complet')[0]).toHaveValue('Marie Ngo');
-    fireEvent.click(screen.getByRole('tab', { name: "Journal d'audit global" }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Utilisateurs et accès' }));
-    expect(screen.getAllByLabelText('Nom complet')[0]).toHaveValue('Marie Ngo');
+    fireEvent.click(button('Annuler'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  test('closes the dialog and confirms after sending invitations', async () => {
+    signedIn();
+    mockApi({ 'POST /api/admin/invitations': { status: 201, created: [{ email: 'm@ccts.test', emailSent: true }] } });
+    open('/admin');
+    fireEvent.click(await screen.findByRole('button', { name: 'Create Account' }));
+    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Marie Ngo' } });
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'm@ccts.test' } });
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'EXAMINING_MAGISTRATE' } });
+    fireEvent.click(button('Send invitations'));
+    expect(await screen.findByText('1 invitation(s) sent.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   test('Pattern B: 5 rows by default, page controls, and a size change returns to page 1', async () => {
     signedIn();
     const calls = mockApi();
     open('/admin');
-    expect(await screen.findByText('1–5 of 12')).toBeInTheDocument();
+    expect(await screen.findByText('Showing 1–5 of 12 users')).toBeInTheDocument();
     fireEvent.click(button('Page 3'));
-    expect(await screen.findByText('11–12 of 12')).toBeInTheDocument();
+    expect(await screen.findByText('Showing 11–12 of 12 users')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Rows per page'), { target: { value: '10' } });
-    expect(await screen.findByText('1–10 of 12')).toBeInTheDocument();
+    expect(await screen.findByText('Showing 1–10 of 12 users')).toBeInTheDocument();
     expect(calls.at(-1).url).toContain('page=1&pageSize=10');
   });
 
@@ -157,27 +174,32 @@ describe('administration console', () => {
 });
 
 describe('15-minute session countdown', () => {
-  const start = async () => {
+  const start = async (minutes) => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    signedIn();
-    const calls = mockApi({
-      'POST /api/auth/activity': { status: 204 },
-      'POST /api/auth/session-expired': { status: 204 },
-    });
+    signedIn(minutes);
+    const calls = mockApi({ 'POST /api/auth/session-expired': { status: 204 } });
     open('/admin');
     await screen.findByRole('timer');
     return calls;
   };
   const wait = (minutes) => act(() => vi.advanceTimersByTimeAsync(minutes * 60 * 1000));
+  const shows = (pattern) => expect(screen.getByRole('timer')).toHaveTextContent(pattern);
 
-  test('counts down, resets on interaction and tells the server', async () => {
+  test('counts down and no interaction resets it', async () => {
     const calls = await start();
-    expect(screen.getByRole('timer')).toHaveTextContent('15:00');
+    shows(/15:00|14:59/);
     await wait(5);
-    expect(screen.getByRole('timer')).toHaveTextContent(/(10:00|09:5\d)/);
-    fireEvent.keyDown(window, { key: 'a' });
-    expect(screen.getByRole('timer')).toHaveTextContent('15:00');
-    expect(calls.some((c) => c.key === 'POST /api/auth/activity')).toBe(true);
+    for (const event of ['pointerMove', 'pointerDown', 'keyDown', 'wheel', 'touchStart', 'scroll']) {
+      fireEvent[event](window);
+    }
+    fireEvent.click(screen.getByRole('tab', { name: 'Global Audit Logs' }));
+    shows(/10:00|09:5\d/);
+    expect(calls.some((c) => c.key === 'POST /api/auth/activity')).toBe(false);
+  });
+
+  test('continues from the time left after a page reload', async () => {
+    await start(4);
+    shows(/04:00|03:59/);
   });
 
   test('locks the screen at zero and requires signing in again', async () => {
@@ -187,7 +209,6 @@ describe('15-minute session countdown', () => {
     expect(within(dialog).getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
     expect(sessionStorage.getItem('ccts.token')).toBeNull();
     expect(calls.some((c) => c.key === 'POST /api/auth/session-expired')).toBe(true);
-    // Interaction after expiry does not unlock anything.
     fireEvent.keyDown(window, { key: 'a' });
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
   });

@@ -7,9 +7,9 @@ import HealthTab from './HealthTab';
 import UsersTab from './UsersTab';
 
 const TABS = [
-  { id: 'users', icon: 'users-gear', Panel: UsersTab },
-  { id: 'audit', icon: 'clipboard-list', Panel: AuditTab },
-  { id: 'health', icon: 'heart-pulse', Panel: HealthTab },
+  { id: 'users', icon: 'user-plus', Panel: UsersTab },
+  { id: 'audit', icon: 'clock-rotate-left', Panel: AuditTab },
+  { id: 'health', icon: 'server', Panel: HealthTab },
 ];
 
 export default function AdminConsole() {
@@ -22,23 +22,26 @@ export default function AdminConsole() {
 
   return (
     <>
-      <h1 className="mb-3 text-2xl font-semibold tracking-tight">{t('admin.console')}</h1>
-      <div role="tablist" className="mb-4 flex flex-wrap gap-7 border-b border-neutral-300">
-        {TABS.map((tab) => (
-          <button key={tab.id} type="button" role="tab" id={`tab-${tab.id}`} aria-selected={active === tab.id}
-            aria-controls={`panel-${tab.id}`}
-            className={`flex items-center gap-2 border-b-2 py-4 text-sm font-medium ${
-              active === tab.id ? 'border-neutral-900 text-neutral-950' : 'border-transparent text-neutral-500 hover:text-neutral-900'}`}
-            onClick={() => setParams({ tab: tab.id })}>
-            <Icon name={tab.icon} />{t(`admin.tabs.${tab.id}`)}
-          </button>
-        ))}
-      </div>
-      {TABS.filter((tab) => visited.has(tab.id)).map(({ id, Panel }) => (
-        <div key={id} role="tabpanel" id={`panel-${id}`} aria-labelledby={`tab-${id}`} hidden={active !== id}>
-          <Panel />
+      <nav className="border-b border-neutral-300 bg-white px-6" aria-label={t('admin.console')}>
+        <div role="tablist" className="flex gap-7">
+          {TABS.map((tab) => (
+            <button key={tab.id} type="button" role="tab" id={`tab-${tab.id}`} aria-selected={active === tab.id}
+              aria-controls={`panel-${tab.id}`}
+              className={`border-b-2 py-4 text-sm font-medium ${
+                active === tab.id ? 'border-neutral-900 text-neutral-950' : 'border-transparent text-neutral-500 hover:text-neutral-900'}`}
+              onClick={() => setParams({ tab: tab.id })}>
+              <Icon name={tab.icon} className="mr-2" />{t(`admin.tabs.${tab.id}`)}
+            </button>
+          ))}
         </div>
-      ))}
+      </nav>
+      <main className="mx-auto max-w-[1440px] p-7">
+        {TABS.filter((tab) => visited.has(tab.id)).map(({ id, Panel }) => (
+          <div key={id} role="tabpanel" id={`panel-${id}`} aria-labelledby={`tab-${id}`} hidden={active !== id}>
+            <Panel />
+          </div>
+        ))}
+      </main>
     </>
   );
 }

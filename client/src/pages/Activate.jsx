@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthShell from '../components/AuthShell';
-import { Field, FormError, Icon, Notice } from '../components/ui';
+import { FormError, Icon, Notice, PasswordField } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { api, query } from '../lib/api';
@@ -18,6 +18,7 @@ export default function Activate() {
   const [fields, setFields] = useState({});
   const [formError, setFormError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [visible, setVisible] = useState(false);
   const verified = useRef(null);
 
   useEffect(() => {
@@ -53,37 +54,41 @@ export default function Activate() {
     }
   }
 
+  const toggle = () => setVisible((current) => !current);
+
   return (
-    <AuthShell title={t('activate.title')}>
-      {invitation.state === 'checking' && <p><Icon name="spinner fa-spin" /> {t('common.loading')}</p>}
-      {invitation.state === 'invalid' && (
-        <>
-          <Notice icon="link-slash">{t('activate.invalid')}</Notice>
-          <Link className="btn w-full" to="/login"><Icon name="right-to-bracket" />{t('activate.toLogin')}</Link>
-        </>
-      )}
+    <AuthShell wide title={t('activate.title')} leading={(
+      <Link className="text-action" to="/login">
+        <Icon name="arrow-left" className="mr-1.5" />{t('activate.toLogin')}
+      </Link>
+    )}>
+      {invitation.state === 'checking' && <p className="text-sm"><Icon name="spinner fa-spin" /> {t('common.loading')}</p>}
+      {invitation.state === 'invalid' && <Notice>{t('activate.invalid')}</Notice>}
       {invitation.state === 'error' && (
         <>
           <FormError code={invitation.code} />
-          <button type="button" className="btn w-full" onClick={() => window.location.reload()}>
+          <button type="button" className="button-secondary mt-4 w-full" onClick={() => window.location.reload()}>
             <Icon name="rotate-right" />{t('common.retry')}
           </button>
         </>
       )}
       {invitation.state === 'valid' && (
-        <form onSubmit={submit} noValidate className="space-y-4">
-          <p className="text-sm">{t('activate.welcome', { name: invitation.fullName, email: invitation.email })}</p>
+        <form onSubmit={submit} noValidate>
+          <div className="border border-neutral-300 bg-neutral-50 p-4 text-sm font-medium">
+            {t('activate.welcome', { name: invitation.fullName, email: invitation.email })}
+          </div>
           <input type="email" autoComplete="username" value={invitation.email} readOnly hidden />
-          <Field label={t('activate.password')} hint={t('activate.hint')} error={fields.password}>
-            {(props) => <input {...props} type="password" autoComplete="new-password" value={password}
-              onChange={(e) => setPassword(e.target.value)} />}
-          </Field>
-          <Field label={t('activate.confirm')} error={fields.confirmPassword}>
-            {(props) => <input {...props} type="password" autoComplete="new-password" value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)} />}
-          </Field>
-          {formError !== 'VALIDATION_FAILED' && <FormError code={formError} />}
-          <button type="submit" className="btn btn-primary w-full" disabled={busy}>
+          <div className="mt-6 space-y-5">
+            <div>
+              <PasswordField label={t('activate.password')} error={fields.password} autoComplete="new-password"
+                value={password} onChange={setPassword} visible={visible} onToggle={toggle} />
+              {!fields.password && <p className="mt-1.5 text-xs text-neutral-500">{t('activate.hint')}</p>}
+            </div>
+            <PasswordField label={t('activate.confirm')} error={fields.confirmPassword} autoComplete="new-password"
+              value={confirmPassword} onChange={setConfirmPassword} visible={visible} />
+          </div>
+          {formError !== 'VALIDATION_FAILED' && <FormError code={formError} className="mt-3" />}
+          <button type="submit" className="button-primary mt-7 w-full" disabled={busy}>
             <Icon name={busy ? 'spinner fa-spin' : 'user-check'} />{t('activate.submit')}
           </button>
         </form>

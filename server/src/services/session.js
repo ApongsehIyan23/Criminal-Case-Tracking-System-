@@ -1,5 +1,5 @@
-// Sessions are a 15-minute sliding JWT plus users.last_activity_at, which is
-// compared against the database clock. Logout and expiry clear last_activity_at.
+// A session is a JWT that ends 15 minutes after sign-in and is never renewed.
+// Logout and expiry also clear users.last_activity_at.
 const jwt = require('jsonwebtoken');
 const { SESSION_MINUTES } = require('../constants');
 

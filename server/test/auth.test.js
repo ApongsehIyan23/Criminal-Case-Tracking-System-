@@ -23,11 +23,6 @@ describe('authentication, sessions and RBAC', () => {
   });
   after(() => ctx.close());
 
-  const idle = (email, minutes) => ctx.owner.query(
-    'UPDATE users SET last_activity_at = now() - make_interval(mins => $2) WHERE email = $1',
-    [email, minutes],
-  );
-
   describe('login', () => {
     test('succeeds, issues a 15-minute JWT and routes by role', async () => {
       for (const [email, password, home] of [
@@ -82,53 +77,58 @@ describe('authentication, sessions and RBAC', () => {
     });
   });
 
-  describe('15-minute inactivity rule', () => {
-    test('allows a request within the window and slides it forward', async () => {
-      const token = await ctx.login();
-      await idle(ADMIN.email, 14);
-      const res = await ctx.as(token).get('/api/auth/me');
-      assert.strictEqual(res.status, 200);
-      assert.ok(res.headers['x-session-token']);
-      const row = await ctx.owner.query(
-        `SELECT last_activity_at > now() - interval '1 minute' AS fresh FROM users WHERE email = $1`, [ADMIN.email]);
-      assert.strictEqual(row.rows[0].fresh, true);
-    });
+  describe('15-minute session limit', () => {
+    const userId = async () => (await ctx.owner.query('SELECT user_id FROM users WHERE email = $1', [ADMIN.email]))
+      .rows[0].user_id;
+    // A token issued `age` seconds ago for a 15-minute session.
+    const tokenAged = async (age) => {
+      const iat = Math.floor(Date.now() / 1000) - age;
+      return jwt.sign({ iat, exp: iat + 900 }, ctx.config.jwtSecret, { subject: await userId() });
+    };
+    const backdateLogins = () => ctx.owner.query(
+      `UPDATE audit_logs SET created_at = now() - interval '1 hour' WHERE action_type = 'USER_LOGIN'`);
 
-    test('ends the session after 15 idle minutes and logs it once', async () => {
+    test('requests do not renew or extend the session', async () => {
       const token = await ctx.login();
-      const before = await ctx.auditCount('SESSION_EXPIRED');
-      await idle(ADMIN.email, 16);
-      for (let i = 0; i < 2; i += 1) {
-        const res = await ctx.as(token).get('/api/auth/me');
-        assert.strictEqual(res.status, 401);
-        assert.strictEqual(res.body.error, 'SESSION_EXPIRED');
+      for (const url of ['/api/auth/me', '/api/admin/users']) {
+        const res = await ctx.as(token).get(url);
+        assert.strictEqual(res.status, 200);
         assert.strictEqual(res.headers['x-session-token'], undefined);
       }
+      assert.strictEqual((await ctx.as(token).post('/api/auth/activity')).status, 404);
+    });
+
+    test('ends 15 minutes after sign-in even for an active user, logged once', async () => {
+      await ctx.login();
+      await backdateLogins();
+      const before = await ctx.auditCount('SESSION_EXPIRED');
+      const stale = await tokenAged(901);
+      for (let i = 0; i < 2; i += 1) {
+        const res = await ctx.as(stale).get('/api/auth/me');
+        assert.strictEqual(res.status, 401);
+        assert.strictEqual(res.body.error, 'SESSION_EXPIRED');
+      }
+      await ctx.as(stale).post('/api/auth/session-expired');
       assert.strictEqual(await ctx.auditCount('SESSION_EXPIRED'), before + 1);
     });
 
-    test('rejects an expired JWT even if the account was recently active', async () => {
-      await ctx.login();
-      const id = (await ctx.owner.query('SELECT user_id FROM users WHERE email = $1', [ADMIN.email])).rows[0].user_id;
-      const stale = jwt.sign({ exp: Math.floor(Date.now() / 1000) - 5 }, ctx.config.jwtSecret, { subject: id });
-      const res = await ctx.as(stale).get('/api/auth/me');
-      assert.strictEqual(res.status, 401);
-      assert.strictEqual(res.body.error, 'SESSION_EXPIRED');
-    });
-
-    test('the heartbeat keeps a session alive', async () => {
-      const token = await ctx.login();
-      await idle(ADMIN.email, 14);
-      assert.strictEqual((await ctx.as(token).post('/api/auth/activity')).status, 204);
-    });
-
-    test('the browser timeout call ends only a session that is really idle', async () => {
+    test('the browser timeout call ends only a session that is due', async () => {
       const token = await ctx.login();
       await ctx.as(token).post('/api/auth/session-expired');
       assert.strictEqual((await ctx.as(token).get('/api/auth/me')).status, 200);
-      await idle(ADMIN.email, 15);
-      assert.strictEqual((await ctx.as(token).post('/api/auth/session-expired')).status, 204);
+      await backdateLogins();
+      const before = await ctx.auditCount('SESSION_EXPIRED');
+      const due = await tokenAged(870);
+      assert.strictEqual((await ctx.as(due).post('/api/auth/session-expired')).status, 204);
       assert.strictEqual((await ctx.as(token).get('/api/auth/me')).status, 401);
+      assert.strictEqual(await ctx.auditCount('SESSION_EXPIRED'), before + 1);
+    });
+
+    test('an old session expiring leaves a newer sign-in alone', async () => {
+      const old = await tokenAged(901);
+      const fresh = await ctx.login();
+      await ctx.as(old).post('/api/auth/session-expired');
+      assert.strictEqual((await ctx.as(fresh).get('/api/auth/me')).status, 200);
     });
 
     test('logout invalidates the session', async () => {
