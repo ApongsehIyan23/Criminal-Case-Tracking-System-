@@ -73,20 +73,96 @@ describe('P1 dashboard', () => {
     expect(calls.some((c) => c.key === 'POST /api/custody/sync')).toBe(true);
   });
 
-  test('the register is collapsed, opens on typing and returns to page 1', async () => {
+  test('keeps the two action buttons and leaves the register to the Cases page', async () => {
     signIn();
     const calls = mockApi();
     open('/police');
-    await screen.findByRole('button', { name: 'Show All Cases (7)' });
+    const main = within(await screen.findByRole('main'));
+    expect(main.getByRole('button', { name: 'Upload Evidence' })).toBeInTheDocument();
+    expect(main.getByRole('link', { name: 'Log New Case' })).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(calls.some((c) => c.key === 'GET /api/cases')).toBe(false);
-    type('Search cases', 'vol');
+  });
+});
+
+describe('Cases page', () => {
+  test('searches the register and returns to page 1', async () => {
+    signIn();
+    const calls = mockApi();
+    open('/police/cases');
     expect(await screen.findByRole('table')).toBeInTheDocument();
-    await waitFor(() => expect(calls.at(-1).url).toContain('search=vol&page=1'));
     fireEvent.click(await screen.findByRole('button', { name: 'Page 2' }));
     await waitFor(() => expect(calls.at(-1).url).toContain('page=2'));
-    type('Search cases', 'vols');
-    await waitFor(() => expect(calls.at(-1).url).toContain('search=vols&page=1'));
+    type('Search cases', 'vol');
+    await waitFor(() => expect(calls.at(-1).url).toContain('search=vol&page=1'));
+  });
+});
+
+describe('sidebar navigation', () => {
+  const sidebar = () => within(screen.getByRole('complementary'));
+  const current = () => sidebar().getAllByRole('link').filter((l) => l.getAttribute('aria-current') === 'page')
+    .map((l) => l.textContent || l.getAttribute('aria-label'));
+  const start = async () => {
+    signIn();
+    const calls = mockApi({
+      'GET /api/cases/open': { items: [{ caseId: 'CM-MFD-2026-0001', incidentTitle: 'Theft' }] },
+      'GET /api/cases/CM-MFD-2026-0001': docket(),
+      'PATCH /api/auth/language': {},
+      'POST /api/auth/logout': {},
+    });
+    open('/police');
+    await screen.findByRole('complementary');
+    return calls;
+  };
+
+  test('each entry shows its page and is the only one highlighted', async () => {
+    await start();
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument();
+    for (const [entry, heading] of [
+      ['Cases', 'Cases'], ['Evidence', 'Evidence'], ['Log New Case', 'Digital Case Initiation'], ['Dashboard', 'Case Dashboard'],
+    ]) {
+      fireEvent.click(sidebar().getByRole('link', { name: entry }));
+      expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument();
+      expect(current()).toEqual([entry]);
+    }
+  });
+
+  test('the Evidence page uploads to the chosen case', async () => {
+    await start();
+    fireEvent.click(sidebar().getByRole('link', { name: 'Evidence' }));
+    await screen.findByRole('option', { name: /CM-MFD-2026-0001/ });
+    type('Active case', 'CM-MFD-2026-0001');
+    expect(await screen.findByRole('button', { name: 'Upload File' })).toBeInTheDocument();
+  });
+
+  test('collapses to icons, remembers it, and keeps every command', async () => {
+    await start();
+    fireEvent.click(sidebar().getByRole('button', { name: 'Collapse sidebar' }));
+    expect(screen.getByRole('complementary')).toHaveAttribute('data-collapsed', 'true');
+    expect(localStorage.getItem('ccts.sidebar')).toBe('collapsed');
+    for (const name of ['Dashboard', 'Cases', 'Evidence', 'Log New Case']) {
+      expect(sidebar().getByRole('link', { name })).toBeInTheDocument();
+    }
+    for (const name of ['Help and FAQ', 'Log Out', 'Expand sidebar']) {
+      expect(sidebar().getByRole('button', { name })).toBeInTheDocument();
+    }
+    expect(sidebar().getByRole('timer')).toHaveTextContent(/1[45]:\d\d/);
+    fireEvent.click(sidebar().getByRole('button', { name: 'Expand sidebar' }));
+    expect(screen.getByRole('complementary')).toHaveAttribute('data-collapsed', 'false');
+  });
+
+  test('language, help, profile and log out work from the sidebar', async () => {
+    const calls = await start();
+    fireEvent.click(sidebar().getByRole('button', { name: /Signed in as/ }));
+    expect(sidebar().getByText('officer@ccts.test')).toBeInTheDocument();
+    fireEvent.click(sidebar().getByRole('button', { name: 'Help and FAQ' }));
+    expect(screen.getByRole('dialog', { name: 'Help and FAQ' })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.click(sidebar().getByRole('button', { name: 'FR' }));
+    expect(sidebar().getByRole('link', { name: 'Affaires' })).toBeInTheDocument();
+    fireEvent.click(sidebar().getByRole('button', { name: 'Se déconnecter' }));
+    await screen.findByRole('heading', { name: 'Connexion' });
+    expect(calls.some((c) => c.key === 'POST /api/auth/logout')).toBe(true);
   });
 });
 
@@ -130,7 +206,8 @@ describe('P2 case initiation', () => {
     await screen.findByLabelText('Incident Title');
     type('Incident Title', 'Temporary');
     fireEvent.click(button('Cancel'));
-    fireEvent.click(await screen.findByRole('link', { name: 'Log New Case' }));
+    await screen.findByRole('heading', { name: 'Case Dashboard' });
+    fireEvent.click(within(screen.getByRole('main')).getByRole('link', { name: 'Log New Case' }));
     expect(screen.getByLabelText('Incident Title')).toHaveValue('');
     type('Incident Title', 'Again');
     fireEvent.click(button('Log Out'));

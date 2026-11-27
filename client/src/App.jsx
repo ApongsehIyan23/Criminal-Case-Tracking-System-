@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import ProtectedLayout from './components/ProtectedLayout';
+import Sidebar from './components/sidebar/Sidebar';
 import { AuthProvider } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import Activate from './pages/Activate';
@@ -18,7 +19,7 @@ export default function App() {
           <Route path="/admin" element={
             <ProtectedLayout role="SYSTEM_ADMINISTRATOR"><AdminConsole /></ProtectedLayout>} />
           <Route path="/police/*" element={
-            <ProtectedLayout role="JUDICIAL_POLICE_OFFICER"><PoliceWorkspace /></ProtectedLayout>} />
+            <ProtectedLayout role="JUDICIAL_POLICE_OFFICER" sidebar={Sidebar}><PoliceWorkspace /></ProtectedLayout>} />
           <Route path="/magistrate/*" element={
             <ProtectedLayout role="EXAMINING_MAGISTRATE"><MagistrateWorkspace /></ProtectedLayout>} />
           <Route path="*" element={<Navigate to="/login" replace />} />
