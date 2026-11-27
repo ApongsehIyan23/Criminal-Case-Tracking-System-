@@ -6,7 +6,7 @@ import ReauthModal from './ReauthModal';
 import TopNav from './TopNav';
 import { Icon } from './ui';
 
-export default function ProtectedLayout({ role, children }) {
+export default function ProtectedLayout({ role, sidebar: SidebarNav, children }) {
   const { status, user } = useAuth();
   const { t } = useLanguage();
 
@@ -21,8 +21,19 @@ export default function ProtectedLayout({ role, children }) {
     <>
       {/* Keyed by user: resuming keeps form contents, another account starts clean. */}
       <div key={user.userId} inert={locked}>
-        <TopNav />
-        <CustodySyncProvider active={!locked}>{children}</CustodySyncProvider>
+        {SidebarNav ? (
+          <div className="flex items-start">
+            <SidebarNav />
+            <div className="min-w-0 flex-1">
+              <CustodySyncProvider active={!locked}>{children}</CustodySyncProvider>
+            </div>
+          </div>
+        ) : (
+          <>
+            <TopNav />
+            <CustodySyncProvider active={!locked}>{children}</CustodySyncProvider>
+          </>
+        )}
       </div>
       {locked && <ReauthModal />}
     </>

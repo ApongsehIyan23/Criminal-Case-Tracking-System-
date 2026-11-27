@@ -6,7 +6,6 @@ import { useCustodySync } from '../../context/CustodySyncContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { api } from '../../lib/api';
 import { useDraft } from '../../lib/useDraft';
-import CaseRegister from './CaseRegister';
 import CustodyHub from './CustodyHub';
 import QuickEvidenceModal from './QuickEvidenceModal';
 
@@ -40,7 +39,6 @@ export default function Dashboard() {
       </PageHeader>
       <FormError code={error} className="mt-3" />
       <CustodyHub data={data} onUpload={(caseId) => setUpload({ caseId, category: '' })} />
-      <CaseRegister total={data?.totalCases} version={version + reload} />
       {upload && (
         <QuickEvidenceModal draft={upload} onChange={setUpload} onClose={() => setUpload(null)}
           onUploaded={() => { setUpload(null); setToast(true); setReload((n) => n + 1); }} />

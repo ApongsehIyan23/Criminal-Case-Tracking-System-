@@ -1,4 +1,4 @@
-// Collapsed until the officer searches or asks for the list (search-first).
+// The Active Case Files Register: search first, with a status filter.
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
@@ -11,9 +11,9 @@ import { useDraft } from '../../lib/useDraft';
 const STATUSES = ['IN_INVESTIGATION', 'TRANSMITTED_TO_MAGISTRATE', 'MANDATE_ISSUED'];
 const COLUMNS = ['caseId', 'summary', 'suspects', 'timer', 'evidence', 'status', 'actions'];
 
-export default function CaseRegister({ total, version }) {
+export default function CaseRegister({ version }) {
   const { t } = useLanguage();
-  const [view, setView] = useDraft('police.register', { open: false, search: '', status: '', page: 1, pageSize: 5 });
+  const [view, setView] = useDraft('police.register', { search: '', status: '', page: 1, pageSize: 5 });
   const [search, setSearch] = useState(view.draft ?? view.search);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -26,20 +26,19 @@ export default function CaseRegister({ total, version }) {
     return () => clearTimeout(timer);
   }, [search, view.search, setView]);
 
-  const { open, search: applied, status, page, pageSize } = view;
+  const { search: applied, status, page, pageSize } = view;
   useEffect(() => {
-    if (!open) return undefined;
     let current = true;
     api.get(`/cases${query({ search: applied.trim(), status, page, pageSize })}`)
       .then((result) => { if (current) { setData(result); setError(null); } })
       .catch((e) => current && setError(e.code));
     return () => { current = false; };
-  }, [open, applied, status, page, pageSize, version]);
+  }, [applied, status, page, pageSize, version]);
 
   function type(value) {
     setSearch(value);
     // The typed text is kept at once, so a refresh cannot lose it.
-    setView((v) => ({ ...v, open: v.open || Boolean(value), draft: value }));
+    setView((v) => ({ ...v, draft: value }));
   }
 
   return (
@@ -55,14 +54,8 @@ export default function CaseRegister({ total, version }) {
                 placeholder={t('register.searchHint')} onChange={(event) => type(event.target.value)} />
             </span>
           </label>
-          <button type="button" className="button-secondary whitespace-nowrap" aria-expanded={open}
-            onClick={() => setView((v) => ({ ...v, open: !v.open }))}>
-            <Icon name={open ? 'chevron-up' : 'list'} />
-            {open ? t('register.hide') : t('register.showAll', { count: total ?? 0 })}
-          </button>
         </div>
       </div>
-      {open && (
         <div>
           <div className="flex justify-end border-b border-neutral-300 bg-neutral-50 px-5 py-3">
             <label>
@@ -106,7 +99,6 @@ export default function CaseRegister({ total, version }) {
             </>
           )}
         </div>
-      )}
     </div>
   );
 }
