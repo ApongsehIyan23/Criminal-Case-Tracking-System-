@@ -8,7 +8,7 @@ import NewCase from './NewCase';
 
 export default function PoliceWorkspace() {
   return (
-    <main className="mx-auto max-w-[1440px] p-7">
+    <main className="p-5">
       <Routes>
         <Route index element={<Dashboard />} />
         <Route path="cases" element={<CasesPage />} />

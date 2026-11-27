@@ -182,7 +182,7 @@ export default {
     ],
     JUDICIAL_POLICE_OFFICER: [
       ["Comment enregistrer une affaire ?","Choisissez « Nouvelle affaire », remplissez le profil de l'incident, ajoutez chaque suspect, victime et témoin, puis enregistrez. Un suspect détenu doit avoir un numéro d'identité, et le délai de 48 heures commence à l'enregistrement."],
-      ["Comment téléverser des preuves ?","Utilisez « Téléverser une preuve » ou l'onglet Preuves numériques d'une affaire. Les fichiers JPEG, PNG et PDF sont acceptés, jusqu'à 500 Ko au total par affaire. Ils indiquent « Analyse en attente » car l'analyse antivirus n'est pas encore disponible."],
+      ["Comment téléverser des preuves ?","Choisissez « Preuves » dans le menu, ou ouvrez l'onglet Preuves numériques d'une affaire. Les fichiers JPEG, PNG et PDF sont acceptés, jusqu'à 500 Ko au total par affaire. Ils indiquent « Analyse en attente » car l'analyse antivirus n'est pas encore disponible."],
       ["Comment fonctionnent les alertes de garde à vue ?","Lorsqu'il reste 6 heures ou moins, un e-mail et une alerte dans l'application sont envoyés une seule fois. Les alertes sont vérifiées lorsque l'application est ouverte. Le délai passe au rouge sous 2 heures."],
       ["Que se passe-t-il lors de la transmission ?","Après confirmation, l'affaire et ses preuves passent en lecture seule et sont envoyées au juge d'instruction."],
       ['Pourquoi me demande-t-on de me reconnecter ?', 'Chaque session prend fin 15 minutes après la connexion, pour protéger les ordinateurs partagés.'],
