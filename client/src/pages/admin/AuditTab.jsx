@@ -4,6 +4,7 @@ import Pagination from '../../components/Pagination';
 import { Field, FormError, Icon, PageHeader } from '../../components/ui';
 import { useLanguage } from '../../context/LanguageContext';
 import { api, query } from '../../lib/api';
+import { saveBlob } from '../../lib/files';
 import { useDraft } from '../../lib/useDraft';
 
 const NO_FILTERS = { search: '', actionType: '', from: '', to: '' };
@@ -60,11 +61,7 @@ export default function AuditTab() {
     setError(null);
     try {
       const { blob, filename } = await api.download(`/admin/audit-logs/export${query({ ...filters, lang: language })}`);
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = filename;
-      link.click();
-      URL.revokeObjectURL(link.href);
+      saveBlob(blob, filename);
     } catch (e) {
       setFieldErrors(e.fields || {});
       setError(e.code || 'SERVER_ERROR');

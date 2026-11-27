@@ -40,7 +40,7 @@ export default function CustodyAlerts({ linkTo }) {
                   {passed ? t('custody.expired') : t('alerts.remaining', { time: formatRemaining(item.expiresAt, now) })}
                 </span>
               </span>
-              {linkTo && <Link className="text-action" to={linkTo(item.caseId)}>{t('police.openCase')}</Link>}
+              {linkTo?.(item) && <Link className="text-action" to={linkTo(item)}>{t('police.openCase')}</Link>}
             </li>
           );
         })}

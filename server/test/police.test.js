@@ -322,15 +322,16 @@ describe('judicial police', () => {
     });
 
     test('opening a docket logs access and returns the trail and any mandate', async () => {
-      const caseId = await createCase();
+      const caseId = await createCase({ participants: [suspect('CM-777')] });
       const before = await officer.get(`/api/cases/${caseId}`);
-      assert.strictEqual(before.body.mandate, null);
+      assert.deepStrictEqual(before.body.mandates, []);
       assert.ok(before.body.trail.some((t) => t.actionType === 'CASE_ACCESSED'));
       await ctx.owner.query(
-        `INSERT INTO judicial_mandates (case_id, decision, ruling_notes, issued_by)
-         SELECT $1, 'RELEASE', 'Libération ordonnée', user_id FROM users WHERE email = 'judge@ccts.test'`, [caseId]);
+        `INSERT INTO judicial_mandates (case_id, participant_id, decision, ruling_notes, issued_by)
+         SELECT p.case_id, p.participant_id, 'RELEASE', 'Libération ordonnée', u.user_id
+           FROM users u, case_participants p WHERE u.email = 'judge@ccts.test' AND p.case_id = $1`, [caseId]);
       const after = await officer.get(`/api/cases/${caseId}`);
-      assert.strictEqual(after.body.mandate.decision, 'RELEASE');
+      assert.strictEqual(after.body.mandates[0].decision, 'RELEASE');
       assert.strictEqual((await officer.get('/api/cases/CM-MFD-2026-9999')).status, 404);
       assert.strictEqual((await officer.get('/api/cases/nonsense')).status, 404);
     });
