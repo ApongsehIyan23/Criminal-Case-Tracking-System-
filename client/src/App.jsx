@@ -5,7 +5,7 @@ import { LanguageProvider } from './context/LanguageContext';
 import Activate from './pages/Activate';
 import AdminConsole from './pages/admin/AdminConsole';
 import Login from './pages/Login';
-import Placeholder from './pages/Placeholder';
+import MagistrateWorkspace from './pages/magistrate/MagistrateWorkspace';
 import PoliceWorkspace from './pages/police/PoliceWorkspace';
 
 export default function App() {
@@ -19,8 +19,8 @@ export default function App() {
             <ProtectedLayout role="SYSTEM_ADMINISTRATOR"><AdminConsole /></ProtectedLayout>} />
           <Route path="/police/*" element={
             <ProtectedLayout role="JUDICIAL_POLICE_OFFICER"><PoliceWorkspace /></ProtectedLayout>} />
-          <Route path="/magistrate" element={
-            <ProtectedLayout role="EXAMINING_MAGISTRATE"><Placeholder area="magistrate" icon="gavel" /></ProtectedLayout>} />
+          <Route path="/magistrate/*" element={
+            <ProtectedLayout role="EXAMINING_MAGISTRATE"><MagistrateWorkspace /></ProtectedLayout>} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </AuthProvider>

@@ -31,7 +31,7 @@ export default function Dashboard() {
 
   return (
     <section>
-      <CustodyAlerts linkTo={(caseId) => `/police/cases/${caseId}`} />
+      <CustodyAlerts linkTo={(item) => `/police/cases/${item.caseId}`} />
       <PageHeader title={t('police.dashboard')}>
         <button type="button" className="button-secondary" onClick={() => setUpload({ caseId: '', category: '' })}>
           <Icon name="cloud-arrow-up" />{t('police.uploadEvidence')}

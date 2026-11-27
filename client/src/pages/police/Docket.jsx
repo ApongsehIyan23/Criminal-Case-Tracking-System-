@@ -1,6 +1,7 @@
 // P3: the case docket workspace.
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import MandateRecord from '../../components/MandateRecord';
 import { FormError, Icon, Notice, Toast } from '../../components/ui';
 import { useCustodySync } from '../../context/CustodySyncContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -18,7 +19,7 @@ const soonest = (participants) => participants
   .sort()[0];
 
 function DocketView({ caseId }) {
-  const { t, formatDateTime } = useLanguage();
+  const { t } = useLanguage();
   const { version } = useCustodySync();
   const navigate = useNavigate();
   const location = useLocation();
@@ -59,7 +60,7 @@ function DocketView({ caseId }) {
     );
   }
 
-  const { case: file, participants, mandate } = data;
+  const { case: file, participants, mandates } = data;
   const locked = file.status !== 'IN_INVESTIGATION';
   const expiresAt = soonest(participants);
   const urgent = expiresAt && isUrgent(expiresAt, now);
@@ -109,20 +110,11 @@ function DocketView({ caseId }) {
         <Notice className="mt-4" title={t('common.confirmation')} onClose={() => setNotice(null)}>{t('docket.transmitted')}</Notice>
       )}
 
-      {mandate && (
-        <div className="mt-4 border border-neutral-500 bg-white p-5">
-          <h2 className="flex items-center gap-2 font-semibold"><Icon name="gavel" />{t('docket.ruling')}</h2>
-          <dl className="mt-4 grid grid-cols-[180px_1fr] gap-y-2 text-sm">
-            <dt className="text-neutral-500">{t('docket.decision')}</dt><dd className="font-semibold">{t(`decision.${mandate.decision}`)}</dd>
-            <dt className="text-neutral-500">{t('docket.notes')}</dt><dd className="whitespace-pre-wrap">{mandate.rulingNotes}</dd>
-            <dt className="text-neutral-500">{t('docket.issuedBy')}</dt><dd>{mandate.issuedBy}</dd>
-            <dt className="text-neutral-500">{t('docket.issuedAt')}</dt><dd>{formatDateTime(mandate.issuedAt)}</dd>
-            {mandate.signedDocumentName && (
-              <><dt className="text-neutral-500">{t('docket.signedDocument')}</dt><dd>{mandate.signedDocumentName}</dd></>
-            )}
-          </dl>
+      {mandates.map((mandate) => (
+        <div key={mandate.mandateId} className="mt-4">
+          <MandateRecord caseId={file.caseId} mandate={mandate} title={t('docket.ruling')} />
         </div>
-      )}
+      ))}
       <FormError code={error} className="mt-3" />
 
       <div className="mt-5 border border-neutral-300 bg-white">

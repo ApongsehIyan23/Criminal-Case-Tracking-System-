@@ -21,7 +21,8 @@ const docket = (status = 'IN_INVESTIGATION', mandate = null) => ({
     caseId: 'CM-MFD-2026-0001', incidentTitle: 'Theft', status, offenseEn: 'Theft', offenseFr: 'Vol',
     incidentDatetime: NOW, unitName: 'Station', createdBy: 'Paul', narrative: 'Story',
   },
-  participants: [], evidence: [], evidenceLimitBytes: 512000, mandate, alerts: [], trail: [], serverNow: NOW,
+  participants: [], evidence: [], evidenceLimitBytes: 512000, mandates: mandate ? [{ mandateId: 'm1', suspectName: 'S', ...mandate }] : [],
+  alerts: [], trail: [], serverNow: NOW,
 });
 
 function mockApi(overrides = {}) {

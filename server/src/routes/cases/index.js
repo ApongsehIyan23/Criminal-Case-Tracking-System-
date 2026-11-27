@@ -6,21 +6,9 @@ const { parsePagination, pageEnvelope } = require('../../pagination');
 const { logAudit } = require('../../services/audit');
 const { createUploadHandler } = require('./evidence');
 const { createCaseHandler } = require('./intake');
+const queries = require('./queries');
 
-const CASE_ID = /^CM-MFD-\d{4}-\d{4,}$/;
-const TRAIL_LIMIT = 200;
-
-const SUMMARY_COLUMNS = `
-  c.case_id AS "caseId", c.incident_title AS "incidentTitle", c.narrative, c.status,
-  u.unit_name AS "unitName",
-  (SELECT count(*)::int FROM digital_evidence e WHERE e.case_id = c.case_id) AS "evidenceCount",
-  (SELECT count(*)::int FROM case_participants p WHERE p.case_id = c.case_id) AS "participantCount",
-  (SELECT coalesce(json_agg(s.full_name ORDER BY s.full_name), '[]')
-     FROM case_participants p JOIN persons s USING (person_id)
-    WHERE p.case_id = c.case_id AND p.role = 'SUSPECT') AS suspects,
-  (SELECT min(t.current_expires_at)
-     FROM custody_countdown_timers t JOIN case_participants p USING (participant_id)
-    WHERE p.case_id = c.case_id AND t.status IN ('ACTIVE','EXTENDED','EXPIRED')) AS "custodyExpiresAt"`;
+const { SUMMARY_COLUMNS } = queries;
 
 function createCaseRouter({ db, storage, custody }) {
   const router = express.Router();
@@ -42,21 +30,7 @@ function createCaseRouter({ db, storage, custody }) {
   router.get('/dashboard', async (req, res) => {
     await custody.sync();
     const [cards, totals] = await Promise.all([
-      db.query(
-        `SELECT t.timer_id AS "timerId", t.status AS "timerStatus", t.started_at AS "startedAt",
-                t.current_expires_at AS "expiresAt", s.full_name AS "suspectName", s.national_id AS "nationalId",
-                EXISTS (SELECT 1 FROM notifications_log n WHERE n.case_id = c.case_id
-                          AND n.notification_type = 'CUSTODY_EXPIRY_WARNING'
-                          AND n.payload->>'timerId' = t.timer_id::text) AS "alertSent",
-                ${SUMMARY_COLUMNS}
-           FROM custody_countdown_timers t
-           JOIN case_participants cp USING (participant_id)
-           JOIN persons s ON s.person_id = cp.person_id
-           JOIN criminal_case_files c ON c.case_id = cp.case_id
-           JOIN organizational_units u ON u.unit_id = c.originating_unit_id
-          WHERE t.status IN ('ACTIVE','EXTENDED','EXPIRED')
-          ORDER BY t.current_expires_at, c.case_id, s.full_name`,
-      ),
+      db.query(`${queries.CUSTODY_CARDS} ORDER BY t.current_expires_at, c.case_id, s.full_name`),
       db.query('SELECT count(*)::int AS total FROM criminal_case_files'),
     ]);
     await logAudit(db, { actor: req.user, actionType: 'DASHBOARD_VIEWED', ip: req.ip });
@@ -111,74 +85,27 @@ function createCaseRouter({ db, storage, custody }) {
 
   router.post('/', createCaseHandler({ db }));
 
-  router.param('caseId', (req, res, next, caseId) => {
-    next(CASE_ID.test(caseId) ? undefined : new ApiError(404, 'CASE_NOT_FOUND'));
-  });
-
-  async function findCase(caseId) {
-    const found = await db.query(
-      `SELECT c.case_id AS "caseId", c.incident_title AS "incidentTitle", c.narrative, c.status,
-              c.incident_datetime AS "incidentDatetime", c.created_at AS "createdAt",
-              c.transmitted_at AS "transmittedAt", o.label_en AS "offenseEn", o.label_fr AS "offenseFr",
-              u.unit_name AS "unitName", creator.full_name AS "createdBy"
-         FROM criminal_case_files c
-         JOIN offense_categories o ON o.offense_category_id = c.offense_category_id
-         JOIN organizational_units u ON u.unit_id = c.originating_unit_id
-         JOIN users creator ON creator.user_id = c.created_by
-        WHERE c.case_id = $1`, [caseId]);
-    if (!found.rowCount) throw new ApiError(404, 'CASE_NOT_FOUND');
-    return found.rows[0];
-  }
-
-  const participantsOf = (caseId) => db.query(
-    `SELECT p.participant_id AS "participantId", p.role, p.is_detained AS "isDetained", s.full_name AS "fullName",
-            s.national_id AS "nationalId", s.phone_number AS "phone", t.timer_id AS "timerId",
-            t.status AS "timerStatus", t.started_at AS "startedAt",
-            t.statutory_expires_at AS "statutoryExpiresAt", t.current_expires_at AS "expiresAt"
-       FROM case_participants p
-       JOIN persons s USING (person_id)
-       LEFT JOIN custody_countdown_timers t USING (participant_id)
-      WHERE p.case_id = $1
-      ORDER BY array_position(ARRAY['SUSPECT','VICTIM','WITNESS']::text[], p.role::text), s.full_name`, [caseId]);
-
-  const evidenceOf = (caseId) => db.query(
-    `SELECT e.evidence_id AS "evidenceId", e.category, e.file_name AS "fileName",
-            e.file_size_bytes::int AS "fileSizeBytes", e.sha256_hash AS "sha256",
-            e.virus_scan_status AS "virusScanStatus", e.is_locked AS "isLocked",
-            e.uploaded_at AS "uploadedAt", u.email AS "uploadedBy"
-       FROM digital_evidence e JOIN users u ON u.user_id = e.uploaded_by
-      WHERE e.case_id = $1 ORDER BY e.uploaded_at, e.file_name`, [caseId]);
+  router.param('caseId', queries.caseIdParam);
 
   // The case docket. Opening it is itself recorded.
   router.get('/:caseId', async (req, res) => {
     const { caseId } = req.params;
     await custody.sync();
-    const caseFile = await findCase(caseId);
+    const caseFile = await queries.findCase(db, caseId);
     await logAudit(db, { actor: req.user, actionType: 'CASE_ACCESSED', caseId, ip: req.ip });
-    const [participants, evidence, mandate, alerts, trail] = await Promise.all([
-      participantsOf(caseId),
-      evidenceOf(caseId),
-      db.query(
-        `SELECT m.decision, m.ruling_notes AS "rulingNotes", m.issued_at AS "issuedAt",
-                m.signed_document_name AS "signedDocumentName", u.full_name AS "issuedBy"
-           FROM judicial_mandates m JOIN users u ON u.user_id = m.issued_by WHERE m.case_id = $1`, [caseId]),
-      db.query(
-        `SELECT notification_id AS "notificationId", channel, recipient_address AS "recipient",
-                delivery_status AS "deliveryStatus", created_at AS "createdAt", sent_at AS "sentAt"
-           FROM notifications_log
-          WHERE case_id = $1 AND notification_type = 'CUSTODY_EXPIRY_WARNING'
-          ORDER BY created_at, recipient_address, channel`, [caseId]),
-      db.query(
-        `SELECT log_id AS "logId", created_at AS "createdAt", actor_email AS "actorEmail",
-                actor_role AS "actorRole", action_type AS "actionType"
-           FROM audit_logs WHERE case_id = $1 ORDER BY created_at DESC, log_id DESC LIMIT ${TRAIL_LIMIT}`, [caseId]),
+    const [participants, evidence, mandates, alerts, trail] = await Promise.all([
+      queries.participantsOf(db, caseId),
+      queries.evidenceOf(db, caseId),
+      queries.mandatesOf(db, caseId),
+      queries.alertsOf(db, caseId),
+      queries.trailOf(db, caseId),
     ]);
     res.json({
       case: caseFile,
       participants: participants.rows,
       evidence: evidence.rows,
       evidenceLimitBytes: EVIDENCE_LIMIT_BYTES,
-      mandate: mandate.rows[0] || null,
+      mandates: mandates.rows,
       alerts: alerts.rows,
       trail: trail.rows,
       serverNow: serverNow(),
@@ -189,9 +116,9 @@ function createCaseRouter({ db, storage, custody }) {
 
   router.get('/:caseId/transmission-review', async (req, res) => {
     const { caseId } = req.params;
-    const caseFile = await findCase(caseId);
+    const caseFile = await queries.findCase(db, caseId);
     if (caseFile.status !== 'IN_INVESTIGATION') throw new ApiError(409, 'CASE_ALREADY_TRANSMITTED');
-    const [participants, evidence] = await Promise.all([participantsOf(caseId), evidenceOf(caseId)]);
+    const [participants, evidence] = await Promise.all([queries.participantsOf(db, caseId), queries.evidenceOf(db, caseId)]);
     await logAudit(db, { actor: req.user, actionType: 'TRANSMISSION_REVIEW_OPENED', caseId, ip: req.ip });
     res.json({ case: caseFile, participants: participants.rows, evidence: evidence.rows, serverNow: serverNow() });
   });

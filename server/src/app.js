@@ -5,6 +5,8 @@ const { createAuthMiddleware } = require('./middleware/auth');
 const { createAuditRouter } = require('./routes/admin/auditLogs');
 const { createCaseRouter } = require('./routes/cases');
 const { createCustodyRouter } = require('./routes/custody');
+const { createMandateRouter } = require('./routes/cases/mandates');
+const { createMagistrateRouter } = require('./routes/magistrate');
 const { createCustodyService } = require('./services/custody');
 const { createSystemRouter } = require('./routes/admin/system');
 const { createUserRouter } = require('./routes/admin/users');
@@ -33,7 +35,11 @@ function createApp({ db, config, mailer, neon, storage }) {
   app.use('/api/admin', admin);
 
   const custody = createCustodyService({ db, mailer, config });
-  app.use('/api/cases', auth.authenticate, auth.requireRole(ROLES.POLICE), createCaseRouter({ db, storage, custody }));
+  // The ruling routes come first; everything else under /api/cases is police only.
+  app.use('/api/cases', auth.authenticate, createMandateRouter({ db, storage, auth }),
+    auth.requireRole(ROLES.POLICE), createCaseRouter({ db, storage, custody }));
+  app.use('/api/magistrate', auth.authenticate, auth.requireRole(ROLES.MAGISTRATE),
+    createMagistrateRouter({ db, storage, custody }));
   const shared = createCustodyRouter({ db, custody });
   app.use(['/api/custody', '/api/notifications'], auth.authenticate);
   app.use('/api', shared);

@@ -7,12 +7,14 @@ require('../src/loadEnv');
 
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'db', 'migrations');
 
-// Tables the application may read, insert and update. It never deletes in this phase.
+// Tables the application may read, insert and update. It never deletes.
 const MUTABLE_TABLES = [
   'organizational_units', 'offense_categories', 'users', 'account_invitations', 'persons',
   'criminal_case_files', 'case_participants', 'custody_countdown_timers', 'digital_evidence',
-  'judicial_mandates', 'notifications_log', 'database_backups',
+  'notifications_log', 'database_backups',
 ];
+// Permanent records: the application may only read and add to them.
+const APPEND_ONLY_TABLES = ['audit_logs', 'judicial_mandates'];
 
 function parseAppRole(databaseUrl) {
   const url = new URL(databaseUrl);
@@ -55,8 +57,8 @@ async function migrate({ ownerUrl, appUrl, log = console.log }) {
     await client.query(`GRANT USAGE ON SCHEMA public TO ${role}`);
     await client.query(`REVOKE ALL ON ALL TABLES IN SCHEMA public FROM ${role}`);
     await client.query(`GRANT SELECT, INSERT, UPDATE ON ${MUTABLE_TABLES.join(', ')} TO ${role}`);
-    await client.query('REVOKE ALL ON audit_logs FROM PUBLIC');
-    await client.query(`GRANT SELECT, INSERT ON audit_logs TO ${role}`);
+    await client.query(`REVOKE ALL ON ${APPEND_ONLY_TABLES.join(', ')} FROM PUBLIC`);
+    await client.query(`GRANT SELECT, INSERT ON ${APPEND_ONLY_TABLES.join(', ')} TO ${role}`);
 
     // Fails the migration if the role can still alter history, e.g. through an inherited role.
     const unsafe = await client.query(
