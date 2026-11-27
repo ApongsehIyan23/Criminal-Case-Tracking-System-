@@ -1,18 +1,7 @@
-const { createApp } = require('./app');
-const { loadConfig } = require('./config');
-const { createDb } = require('./db');
-const { createSendgridMailer } = require('./services/email');
-const { createNeonClient } = require('./services/neon');
-const { createStorage } = require('./services/storage');
+// Local development server.
+const { createServer } = require('./server');
 
-const config = loadConfig();
-const app = createApp({
-  db: createDb(config.databaseUrl),
-  config,
-  mailer: createSendgridMailer(config),
-  neon: createNeonClient(config),
-  storage: createStorage(config),
-});
+const { app, config } = createServer();
 
 app.listen(config.port, (err) => {
   // Express passes startup failures, such as a port already in use, to this callback.
