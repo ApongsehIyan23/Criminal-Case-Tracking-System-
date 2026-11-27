@@ -10,7 +10,12 @@ export default function Login() {
   const { status, user } = useAuth();
   const { state } = useLocation();
 
-  if (status === 'active') return <Navigate to={homeFor(user.role)} replace />;
+  if (status === 'active') {
+    const home = homeFor(user.role);
+    // Back to where the session ended, but only for the same user.
+    const resume = state?.userId === user.userId && state?.from?.startsWith(home);
+    return <Navigate to={resume ? state.from : home} replace />;
+  }
 
   const message = (state?.activated && t('login.activated')) || (status === 'expired' && t('login.expired'));
 

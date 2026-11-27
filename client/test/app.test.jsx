@@ -177,7 +177,12 @@ describe('15-minute session countdown', () => {
   const start = async (minutes) => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     signedIn(minutes);
-    const calls = mockApi({ 'POST /api/auth/session-expired': { status: 204 } });
+    const calls = mockApi({
+      'POST /api/auth/session-expired': { status: 204 },
+      'POST /api/auth/continue': { token: 'new-token', sessionMinutes: 15 },
+      'POST /api/auth/logout': { status: 204 },
+      'POST /api/auth/login': { token: 't', sessionMinutes: 15, user: ADMIN },
+    });
     open('/admin');
     await screen.findByRole('timer');
     return calls;
@@ -202,14 +207,60 @@ describe('15-minute session countdown', () => {
     shows(/04:00|03:59/);
   });
 
-  test('locks the screen at zero and requires signing in again', async () => {
+  test('warns when 5 minutes remain, not before', async () => {
+    await start();
+    await wait(9.9);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    await wait(0.2);
+    const dialog = screen.getByRole('alertdialog', { name: 'You will be logged out soon' });
+    expect(within(dialog).getByTestId('warning-countdown')).toHaveTextContent(/0(5:00|4:5\d)/);
+  });
+
+  for (const name of ['Continue session', 'Close']) {
+    test(`"${name}" starts another 15 minutes`, async () => {
+      const calls = await start(4);
+      fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name }));
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+      shows(/15:00|14:59/);
+      expect(calls.filter((c) => c.key === 'POST /api/auth/continue')).toHaveLength(1);
+    });
+  }
+
+  test('"Log out now" signs out at once', async () => {
+    const calls = await start(4);
+    fireEvent.click(screen.getByRole('button', { name: 'Log out now' }));
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+    expect(calls.some((c) => c.key === 'POST /api/auth/logout')).toBe(true);
+  });
+
+  test('at zero shows the timeout dialog, then returns to the same page after sign-in', async () => {
     const calls = await start();
+    fireEvent.click(screen.getByRole('tab', { name: 'Global Audit Logs' }));
     await wait(15.1);
-    const dialog = screen.getByRole('alertdialog');
-    expect(within(dialog).getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    const dialog = screen.getByRole('alertdialog', { name: 'Session Timeout!' });
     expect(sessionStorage.getItem('ccts.token')).toBeNull();
     expect(calls.some((c) => c.key === 'POST /api/auth/session-expired')).toBe(true);
-    fireEvent.keyDown(window, { key: 'a' });
-    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Login' }));
+    fireEvent.change(await screen.findByLabelText('Email address'), { target: { value: 'admin@ccts.test' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Password-123' } });
+    fireEvent.click(button('Sign in'));
+    expect(await screen.findByRole('tab', { name: 'Global Audit Logs', selected: true })).toBeInTheDocument();
   });
+
+  for (const [role, path] of [['JUDICIAL_POLICE_OFFICER', '/police'], ['EXAMINING_MAGISTRATE', '/magistrate']]) {
+    test(`uses the same dialogs for ${role}`, async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      signedIn(4);
+      mockApi({
+        'GET /api/auth/me': { user: { ...ADMIN, role } },
+        'GET /api/magistrate/dashboard': { kpis: {}, urgent: [] },
+        'GET /api/magistrate/queue': { items: [], total: 0 },
+      });
+      open(path);
+      expect(await screen.findByRole('alertdialog', { name: 'You will be logged out soon' })).toBeInTheDocument();
+      await wait(4.1);
+      expect(screen.getByRole('alertdialog', { name: 'Session Timeout!' })).toBeInTheDocument();
+    });
+  }
 });

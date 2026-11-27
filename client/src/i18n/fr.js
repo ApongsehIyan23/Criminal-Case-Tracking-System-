@@ -19,11 +19,7 @@ export default {
     activated: 'Votre compte est activé. Connectez-vous avec votre nouveau mot de passe.',
     expired: 'Votre session de 15 minutes a pris fin. Veuillez vous reconnecter.',
   },
-  reauth: {
-    title: 'Veuillez vous reconnecter',
-    body: 'Les sessions durent 15 minutes pour protéger cet ordinateur partagé. Connectez-vous pour reprendre là où vous étiez.',
-    leave: 'Retour à la page de connexion',
-  },
+  session: {"warningTitle":"Vous allez bientôt être déconnecté","warningBody":"Pour votre sécurité, vous êtes automatiquement déconnecté 15 minutes après votre connexion ou la prolongation de votre session.","logoutNow":"Se déconnecter maintenant","continue":"Continuer la session","endedTitle":"Session expirée !","endedBody":"Vous avez été déconnecté car votre session de 15 minutes est terminée","login":"Connexion"},
   activate: {
     title: 'Activez votre compte',
     welcome: 'Bienvenue, {name}. Choisissez un mot de passe pour {email}.',
@@ -89,6 +85,7 @@ export default {
     empty: 'Aucune entrée ne correspond à ces filtres.',
   },
   actions: {
+    SESSION_EXTENDED: "Session prolongée",
     MAGISTRATE_DASHBOARD_VIEWED: "Tableau de bord du magistrat consulté",
     CASE_QUEUE_VIEWED: "File des affaires consultée",
     EVIDENCE_ACCESSED: "Fichier de preuve consulté",
@@ -178,14 +175,14 @@ export default {
       ["Le journal d'audit peut-il être modifié ?", "Non. C'est un registre permanent. Vous pouvez le consulter, le filtrer et l'exporter."],
       ["Que contient l'export CSV ?", "Toutes les entrées correspondant à vos filtres, pas seulement la page affichée."],
       ['Une sauvegarde a échoué. Pourquoi ?', "Le message indique la raison. Le fournisseur peut limiter le nombre d'instantanés conservés selon votre formule."],
-      ['Pourquoi me demande-t-on de me reconnecter ?', 'Chaque session prend fin 15 minutes après la connexion, pour protéger les ordinateurs partagés.'],
+      ['Pourquoi me demande-t-on de me reconnecter ?', 'Les sessions durent 15 minutes pour protéger les ordinateurs partagés. Lorsqu’il reste 5 minutes, choisissez « Continuer la session » pour 15 minutes de plus.'],
     ],
     JUDICIAL_POLICE_OFFICER: [
       ["Comment enregistrer une affaire ?","Choisissez « Nouvelle affaire », remplissez le profil de l'incident, ajoutez chaque suspect, victime et témoin, puis enregistrez. Un suspect détenu doit avoir un numéro d'identité, et le délai de 48 heures commence à l'enregistrement."],
       ["Comment téléverser des preuves ?","Choisissez « Preuves » dans le menu, ou ouvrez l'onglet Preuves numériques d'une affaire. Les fichiers JPEG, PNG et PDF sont acceptés, jusqu'à 500 Ko au total par affaire. Ils indiquent « Analyse en attente » car l'analyse antivirus n'est pas encore disponible."],
       ["Comment fonctionnent les alertes de garde à vue ?","Lorsqu'il reste 6 heures ou moins, un e-mail et une alerte dans l'application sont envoyés une seule fois. Les alertes sont vérifiées lorsque l'application est ouverte. Le délai passe au rouge sous 2 heures."],
       ["Que se passe-t-il lors de la transmission ?","Après confirmation, l'affaire et ses preuves passent en lecture seule et sont envoyées au juge d'instruction."],
-      ['Pourquoi me demande-t-on de me reconnecter ?', 'Chaque session prend fin 15 minutes après la connexion, pour protéger les ordinateurs partagés.'],
+      ['Pourquoi me demande-t-on de me reconnecter ?', 'Les sessions durent 15 minutes pour protéger les ordinateurs partagés. Lorsqu’il reste 5 minutes, choisissez « Continuer la session » pour 15 minutes de plus.'],
       ['Qui gère mon compte ?', 'Votre administrateur système.'],
     ],
     EXAMINING_MAGISTRATE: [

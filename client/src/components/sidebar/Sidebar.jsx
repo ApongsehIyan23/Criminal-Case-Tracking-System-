@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { api, tokenStore } from '../../lib/api';
-import { formatCountdown, useSessionCountdown } from '../../lib/useSessionCountdown';
+import { useSessionRemaining } from '../../context/SessionContext';
+import { api } from '../../lib/api';
+import { formatCountdown } from '../../lib/useSessionCountdown';
 import HelpPanel from '../HelpPanel';
 import {
   Avatar, CasesIcon, ChevronRight, ClockIcon, CollapseIcon, DashboardIcon, EvidenceIcon, GlobeIcon,
@@ -51,8 +52,7 @@ function Section({ collapsed, label, children }) {
 
 function SessionItem({ collapsed }) {
   const { t } = useLanguage();
-  const { timeout } = useAuth();
-  const time = formatCountdown(useSessionCountdown(tokenStore.deadline(), timeout));
+  const time = formatCountdown(useSessionRemaining());
   return (
     <div role="timer" aria-label={t('nav.session')} title={t('nav.session')}
       className={collapsed

@@ -6,14 +6,15 @@ const bearerToken = (req) => /^Bearer (.+)$/.exec(req.get('authorization') || ''
 
 const actorFrom = (row) => ({ userId: row.user_id, email: row.email, role: row.role });
 
-// Records the end of a session once. A newer sign-in by the same user is left alone.
+// Records the end of a session once. A newer sign-in or a continued session by the
+// same user is left alone.
 async function endExpiredSession(db, session, ip) {
   await db.transaction(async (client) => {
     const ended = await client.query(
       `UPDATE users SET last_activity_at = NULL
         WHERE user_id = $1 AND last_activity_at IS NOT NULL
           AND NOT EXISTS (SELECT 1 FROM audit_logs
-                           WHERE actor_id = $1 AND action_type = 'USER_LOGIN'
+                           WHERE actor_id = $1 AND action_type IN ('USER_LOGIN','SESSION_EXTENDED')
                              AND created_at >= to_timestamp($2) + interval '1 second')
         RETURNING user_id, email, role`,
       [session.sub, session.iat],

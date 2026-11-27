@@ -1,15 +1,15 @@
 import { useCallback, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { api, tokenStore } from '../lib/api';
-import { formatCountdown, useSessionCountdown } from '../lib/useSessionCountdown';
+import { useSessionRemaining } from '../context/SessionContext';
+import { api } from '../lib/api';
+import { formatCountdown } from '../lib/useSessionCountdown';
 import HelpPanel from './HelpPanel';
 import { Icon, LanguageSwitcher } from './ui';
 
 function SessionCountdown() {
   const { t } = useLanguage();
-  const { timeout } = useAuth();
-  const remaining = useSessionCountdown(tokenStore.deadline(), timeout);
+  const remaining = useSessionRemaining();
   return (
     <div role="timer" className="flex items-center gap-2 border-l border-neutral-300 pl-5 text-sm">
       <Icon name="hourglass-half" className="text-neutral-500" />

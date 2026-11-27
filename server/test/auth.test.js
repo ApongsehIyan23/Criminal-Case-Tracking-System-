@@ -131,6 +131,34 @@ describe('authentication, sessions and RBAC', () => {
       assert.strictEqual((await ctx.as(fresh).get('/api/auth/me')).status, 200);
     });
 
+    test('"Continue session" issues a fresh 15 minutes and records it', async () => {
+      await ctx.login();
+      await backdateLogins();
+      const old = await tokenAged(700);
+      const res = await ctx.as(old).post('/api/auth/continue');
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.body.sessionMinutes, 15);
+      const claims = jwt.verify(res.body.token, ctx.config.jwtSecret);
+      assert.strictEqual(claims.exp - claims.iat, 900);
+      assert.ok(claims.exp > Math.floor(Date.now() / 1000) + 890);
+      assert.strictEqual(await ctx.auditCount('SESSION_EXTENDED'), 1);
+
+      // The replaced session running out must not end the continued one.
+      await ctx.owner.query(
+        `UPDATE audit_logs SET created_at = now() WHERE action_type = 'SESSION_EXTENDED'`);
+      await ctx.as(await tokenAged(901)).get('/api/auth/me');
+      assert.strictEqual((await ctx.as(res.body.token).get('/api/auth/me')).status, 200);
+    });
+
+    test('an ended or logged-out session cannot be continued', async () => {
+      const token = await ctx.login();
+      assert.strictEqual((await ctx.as(await tokenAged(901)).post('/api/auth/continue')).status, 401);
+      const again = await ctx.login();
+      await ctx.as(again).post('/api/auth/logout');
+      assert.strictEqual((await ctx.as(token).post('/api/auth/continue')).status, 401);
+      assert.strictEqual((await ctx.api.post('/api/auth/continue')).status, 401);
+    });
+
     test('logout invalidates the session', async () => {
       const token = await ctx.login();
       assert.strictEqual((await ctx.as(token).post('/api/auth/logout')).status, 204);
