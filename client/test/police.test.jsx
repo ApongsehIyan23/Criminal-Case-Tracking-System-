@@ -73,15 +73,27 @@ describe('P1 dashboard', () => {
     expect(calls.some((c) => c.key === 'POST /api/custody/sync')).toBe(true);
   });
 
-  test('keeps the two action buttons and leaves the register to the Cases page', async () => {
+  test('offers its actions only in the sidebar', async () => {
     signIn();
     const calls = mockApi();
     open('/police');
     const main = within(await screen.findByRole('main'));
-    expect(main.getByRole('button', { name: 'Upload Evidence' })).toBeInTheDocument();
-    expect(main.getByRole('link', { name: 'Log New Case' })).toBeInTheDocument();
+    await main.findAllByTestId('custody-card');
+    expect(main.queryByRole('button', { name: 'Upload Evidence' })).not.toBeInTheDocument();
+    expect(main.queryByRole('link', { name: 'Log New Case' })).not.toBeInTheDocument();
+    const sidebar = within(screen.getByRole('complementary'));
+    expect(sidebar.getByRole('link', { name: 'Log New Case' })).toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'Evidence' })).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(calls.some((c) => c.key === 'GET /api/cases')).toBe(false);
+  });
+
+  test('a custody card still opens the quick upload dialog', async () => {
+    signIn();
+    mockApi({ 'GET /api/cases/open': { items: [] } });
+    open('/police');
+    fireEvent.click(await screen.findByRole('button', { name: 'Quick evidence upload: CM-MFD-2026-0001' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
 
@@ -207,7 +219,7 @@ describe('P2 case initiation', () => {
     type('Incident Title', 'Temporary');
     fireEvent.click(button('Cancel'));
     await screen.findByRole('heading', { name: 'Case Dashboard' });
-    fireEvent.click(within(screen.getByRole('main')).getByRole('link', { name: 'Log New Case' }));
+    fireEvent.click(within(screen.getByRole('complementary')).getByRole('link', { name: 'Log New Case' }));
     expect(screen.getByLabelText('Incident Title')).toHaveValue('');
     type('Incident Title', 'Again');
     fireEvent.click(button('Log Out'));

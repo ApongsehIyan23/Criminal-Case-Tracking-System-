@@ -87,7 +87,7 @@ export default function NewCase() {
   const label = (offense) => (language === 'FR' ? offense.labelFr : offense.labelEn);
 
   return (
-    <section className="mx-auto max-w-5xl">
+    <section>
       <Link className="text-action" to="/police"><Icon name="arrow-left" className="mr-1.5" />{t('police.back')}</Link>
       <h1 className="mt-4 text-2xl font-semibold">{t('intake.title')}</h1>
       <form onSubmit={submit} noValidate className="mt-6 space-y-6">

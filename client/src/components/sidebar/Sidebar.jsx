@@ -164,8 +164,9 @@ export default function Sidebar() {
   return (
     <>
       <aside data-collapsed={collapsed}
-        className={`sticky top-2 z-30 m-2 flex h-[calc(100vh-1rem)] min-h-[600px] shrink-0 flex-col rounded-xl bg-[#1a1a1a] font-['Inter_Variable',Inter,sans-serif] text-white transition-all duration-200 ${
-          collapsed ? 'w-[56px] items-center py-2' : 'w-[240px]'}`}>
+        className={`z-30 shrink-0 self-stretch bg-[#1a1a1a] font-['Inter_Variable',Inter,sans-serif] text-white transition-all duration-200 ${
+          collapsed ? 'w-[56px]' : 'w-[240px]'}`}>
+        <div className={`sticky top-0 flex h-screen min-h-[600px] flex-col ${collapsed ? 'items-center py-2' : ''}`}>
         {collapsed ? (
           // The icon-only design has no separate toggle, so the logo expands the sidebar.
           <button type="button" className={`pb-4 pt-[10px] ${FOCUS}`} onClick={() => setCollapsed(false)}
@@ -210,6 +211,7 @@ export default function Sidebar() {
           <NavItem collapsed={collapsed} icon={LogOutIcon} label={t('nav.logout')} onClick={logout} />
         </Section>
         <Profile collapsed={collapsed} />
+        </div>
       </aside>
       {helpOpen && <HelpPanel role={user.role} onClose={closeHelp} />}
     </>

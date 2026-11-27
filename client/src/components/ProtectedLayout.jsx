@@ -22,7 +22,7 @@ export default function ProtectedLayout({ role, sidebar: SidebarNav, children })
       {/* Keyed by user: resuming keeps form contents, another account starts clean. */}
       <div key={user.userId} inert={locked}>
         {SidebarNav ? (
-          <div className="flex items-start">
+          <div className="flex min-h-screen">
             <SidebarNav />
             <div className="min-w-0 flex-1">
               <CustodySyncProvider active={!locked}>{children}</CustodySyncProvider>

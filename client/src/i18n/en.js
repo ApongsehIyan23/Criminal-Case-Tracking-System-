@@ -182,7 +182,7 @@ export default {
     ],
     JUDICIAL_POLICE_OFFICER: [
       ["How do I log a case?","Choose \"Log New Case\", complete the incident profile, add every suspect, victim and witness, then save. A detained suspect needs a National ID, and the 48-hour timer starts when you save."],
-      ["How do I upload evidence?","Use \"Upload Evidence\" or the Digital Evidence tab of a case. JPEG, PNG and PDF files are accepted, up to 500 KB in total per case. Files show \"Scan pending\" because virus scanning is not yet available."],
+      ["How do I upload evidence?","Choose \"Evidence\" in the sidebar, or open the Digital Evidence tab of a case. JPEG, PNG and PDF files are accepted, up to 500 KB in total per case. Files show \"Scan pending\" because virus scanning is not yet available."],
       ["How do custody alerts work?","When 6 hours or less remain, an email and an in-app alert are sent once. Alerts are checked while someone has the application open. The timer turns red under 2 hours."],
       ["What happens when I transmit a case?","After you confirm the review, the case and its evidence become read-only and go to the examining magistrate."],
       ['Why was I asked to sign in again?', 'Each session ends 15 minutes after you sign in, to protect shared computers.'],
