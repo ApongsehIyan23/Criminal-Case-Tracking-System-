@@ -84,6 +84,12 @@ function createAuthRouter({ db, config, auth }) {
     res.json({ user: publicUser(req.user) });
   });
 
+  // "Continue session": the only way to get more time without signing in again.
+  router.post('/continue', auth.authenticate, async (req, res) => {
+    await logAudit(db, { actor: req.user, actionType: 'SESSION_EXTENDED', ip: req.ip });
+    res.json({ token: signToken(req.user.userId, config.jwtSecret), sessionMinutes: SESSION_MINUTES });
+  });
+
   router.post('/logout', auth.authenticate, async (req, res) => {
     await db.transaction(async (client) => {
       await client.query('UPDATE users SET last_activity_at = NULL WHERE user_id = $1', [req.user.userId]);

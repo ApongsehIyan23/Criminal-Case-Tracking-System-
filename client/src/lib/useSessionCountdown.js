@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
-// A plain countdown to a fixed deadline set at sign-in. Nothing on the page
-// (mouse, keyboard, scrolling or requests) moves it. It compares against the
-// wall clock, so a sleeping computer or background tab cannot stretch it.
+// A plain countdown to a deadline. Nothing on the page (mouse, keyboard, scrolling
+// or requests) moves it; only a new deadline does. It compares against the wall
+// clock, so a sleeping computer or background tab cannot stretch it.
 export function useSessionCountdown(deadline, onTimeout) {
   const [remaining, setRemaining] = useState(() => Math.max(0, deadline - Date.now()));
   const timeout = useRef(onTimeout);

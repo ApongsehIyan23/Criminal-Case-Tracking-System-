@@ -19,11 +19,7 @@ export default {
     activated: 'Your account is activated. Please sign in with your new password.',
     expired: 'Your 15-minute session ended. Please sign in again.',
   },
-  reauth: {
-    title: 'Please sign in again',
-    body: 'Sessions last 15 minutes to protect this shared computer. Sign in to continue where you stopped.',
-    leave: 'Return to the sign-in page',
-  },
+  session: {"warningTitle":"You will be logged out soon","warningBody":"For your security, we log you out automatically 15 minutes after you sign in or continue your session.","logoutNow":"Log out now","continue":"Continue session","endedTitle":"Session Timeout!","endedBody":"You have been logged out because your 15-minute session ended","login":"Login"},
   activate: {
     title: 'Activate your account',
     welcome: 'Welcome, {name}. Choose a password for {email}.',
@@ -89,6 +85,7 @@ export default {
     empty: 'No log entries match these filters.',
   },
   actions: {
+    SESSION_EXTENDED: "Session continued",
     MAGISTRATE_DASHBOARD_VIEWED: "Magistrate dashboard viewed",
     CASE_QUEUE_VIEWED: "Case queue viewed",
     EVIDENCE_ACCESSED: "Evidence file accessed",
@@ -178,14 +175,14 @@ export default {
       ['Can audit logs be changed?', 'No. They are a permanent record. You can search, filter and export them.'],
       ['What does the CSV export contain?', 'Every entry matching your filters, not only the page on screen.'],
       ['A backup failed. Why?', 'The message shows the reason. The backup provider may limit how many snapshots your plan can keep.'],
-      ['Why was I asked to sign in again?', 'Each session ends 15 minutes after you sign in, to protect shared computers.'],
+      ['Why was I asked to sign in again?', 'Sessions last 15 minutes to protect shared computers. When 5 minutes remain you can choose "Continue session" to start another 15 minutes.'],
     ],
     JUDICIAL_POLICE_OFFICER: [
       ["How do I log a case?","Choose \"Log New Case\", complete the incident profile, add every suspect, victim and witness, then save. A detained suspect needs a National ID, and the 48-hour timer starts when you save."],
       ["How do I upload evidence?","Choose \"Evidence\" in the sidebar, or open the Digital Evidence tab of a case. JPEG, PNG and PDF files are accepted, up to 500 KB in total per case. Files show \"Scan pending\" because virus scanning is not yet available."],
       ["How do custody alerts work?","When 6 hours or less remain, an email and an in-app alert are sent once. Alerts are checked while someone has the application open. The timer turns red under 2 hours."],
       ["What happens when I transmit a case?","After you confirm the review, the case and its evidence become read-only and go to the examining magistrate."],
-      ['Why was I asked to sign in again?', 'Each session ends 15 minutes after you sign in, to protect shared computers.'],
+      ['Why was I asked to sign in again?', 'Sessions last 15 minutes to protect shared computers. When 5 minutes remain you can choose "Continue session" to start another 15 minutes.'],
       ['Who manages my account?', 'Your System Administrator.'],
     ],
     EXAMINING_MAGISTRATE: [

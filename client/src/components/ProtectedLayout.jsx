@@ -2,7 +2,8 @@ import { Navigate } from 'react-router-dom';
 import { homeFor, useAuth } from '../context/AuthContext';
 import { CustodySyncProvider } from '../context/CustodySyncContext';
 import { useLanguage } from '../context/LanguageContext';
-import ReauthModal from './ReauthModal';
+import { SessionProvider } from '../context/SessionContext';
+import SessionTimeoutModal from './session/SessionTimeoutModal';
 import TopNav from './TopNav';
 import { Icon } from './ui';
 
@@ -18,8 +19,8 @@ export default function ProtectedLayout({ role, sidebar: SidebarNav, children })
 
   const locked = status === 'expired';
   return (
-    <>
-      {/* Keyed by user: resuming keeps form contents, another account starts clean. */}
+    <SessionProvider>
+      {/* Keyed by user, so another account starts clean. */}
       <div key={user.userId} inert={locked}>
         {SidebarNav ? (
           <div className="flex min-h-screen">
@@ -35,7 +36,7 @@ export default function ProtectedLayout({ role, sidebar: SidebarNav, children })
           </>
         )}
       </div>
-      {locked && <ReauthModal />}
-    </>
+      {locked && <SessionTimeoutModal />}
+    </SessionProvider>
   );
 }

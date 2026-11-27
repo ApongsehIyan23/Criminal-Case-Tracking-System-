@@ -1,4 +1,5 @@
-// A session is a JWT that ends 15 minutes after sign-in and is never renewed.
+// A session is a JWT that ends 15 minutes after it is issued. It is issued at
+// sign-in, and again only when the user chooses "Continue session".
 // Logout and expiry also clear users.last_activity_at.
 const jwt = require('jsonwebtoken');
 const { SESSION_MINUTES } = require('../constants');
