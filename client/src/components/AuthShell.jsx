@@ -1,21 +1,22 @@
+// Layout shared by the sign-in, activation and password screens: the system name
+// and language switcher above one rounded card (from the login design).
 import { useLanguage } from '../context/LanguageContext';
 import { LanguageSwitcher } from './ui';
 
-// Layout shared by the sign-in and activation screens.
-export default function AuthShell({ title, leading, wide = false, banner, children }) {
+// `hideTitle` keeps the heading for screen readers only, as on the sign-in card.
+export default function AuthShell({ title, hideTitle = false, banner, children }) {
   const { t } = useLanguage();
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <div className={`w-full ${wide ? 'max-w-lg' : 'max-w-md'}`}>
-        <div className="mb-4 flex items-center justify-between">
-          {leading || <span className="text-sm font-semibold">{t('app.short')}</span>}
+    <main className="auth flex min-h-screen items-center justify-center p-6">
+      <div className="w-[420px] max-w-full">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <p className="text-sm font-semibold leading-snug text-[#1a1a1a]">{t('app.title')}</p>
           <LanguageSwitcher />
         </div>
         {banner}
-        <div className="border border-neutral-300 bg-white p-8 shadow-sm">
-          <p className="text-sm text-neutral-600">{t('app.title')}</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{title}</h1>
-          <div className="mt-6">{children}</div>
+        <div className="rounded-2xl bg-white px-8 py-9 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
+          <h1 className={hideTitle ? 'sr-only' : 'mb-6 text-xl font-bold text-[#1a1a1a]'}>{title}</h1>
+          {children}
         </div>
       </div>
     </main>

@@ -1,5 +1,5 @@
 const sgMail = require('@sendgrid/mail');
-const { INVITATION_HOURS } = require('../constants');
+const { INVITATION_HOURS, PASSWORD_RESET_MINUTES } = require('../constants');
 
 function createSendgridMailer({ sendgridApiKey, sendgridSender }) {
   const configured = Boolean(sendgridApiKey && sendgridSender);
@@ -48,6 +48,32 @@ function invitationEmail({ to, fullName, link, language }) {
   return { to, subject: 'CCTS: Activate your account / Activez votre compte', text, html };
 }
 
+function passwordResetEmail({ to, fullName, link, language }) {
+  const blocks = {
+    EN: {
+      greeting: `Hello ${fullName},`,
+      body: 'A password reset was requested for your account on the Criminal Case Tracking System (CCTS).',
+      action: 'Choose a new password',
+      note: `This link works once and expires in ${PASSWORD_RESET_MINUTES} minutes. If you did not ask for it, ignore this email: your password stays the same.`,
+    },
+    FR: {
+      greeting: `Bonjour ${fullName},`,
+      body: 'Une réinitialisation du mot de passe a été demandée pour votre compte sur le système de suivi des affaires pénales (CCTS).',
+      action: 'Choisissez un nouveau mot de passe',
+      note: `Ce lien est à usage unique et expire dans ${PASSWORD_RESET_MINUTES} minutes. Si vous ne l'avez pas demandé, ignorez cet e-mail : votre mot de passe reste inchangé.`,
+    },
+  };
+  const order = language === 'FR' ? ['FR', 'EN'] : ['EN', 'FR'];
+  const text = order
+    .map((l) => `${blocks[l].greeting}\n\n${blocks[l].body}\n\n${blocks[l].action}:\n${link}\n\n${blocks[l].note}`)
+    .join('\n\n----------\n\n');
+  const html = order
+    .map((l) => `<p>${escapeHtml(blocks[l].greeting)}</p><p>${escapeHtml(blocks[l].body)}</p>`
+      + `<p><a href="${escapeHtml(link)}">${escapeHtml(blocks[l].action)}</a></p><p>${escapeHtml(blocks[l].note)}</p>`)
+    .join('<hr>');
+  return { to, subject: 'CCTS: Reset your password / Réinitialisez votre mot de passe', text, html };
+}
+
 // Carries the case number and deadline only: no personal details in email.
 function custodyAlertEmail({ to, caseId, expiresAt, language, link, timeZone }) {
   const when = (locale) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone })
@@ -71,4 +97,4 @@ function custodyAlertEmail({ to, caseId, expiresAt, language, link, timeZone }) 
   };
 }
 
-module.exports = { createSendgridMailer, invitationEmail, custodyAlertEmail };
+module.exports = { createSendgridMailer, invitationEmail, passwordResetEmail, custodyAlertEmail };

@@ -1,6 +1,6 @@
 const { ApiError } = require('../errors');
 const { logAudit } = require('../services/audit');
-const { verifyToken } = require('../services/session');
+const { verifyToken, passwordStamp } = require('../services/session');
 
 const bearerToken = (req) => /^Bearer (.+)$/.exec(req.get('authorization') || '')?.[1] || null;
 
@@ -44,12 +44,15 @@ function createAuthMiddleware({ db, config }) {
     const active = await db.query(
       `UPDATE users SET last_activity_at = now()
         WHERE user_id = $1 AND status = 'ACTIVE' AND last_activity_at IS NOT NULL
-        RETURNING user_id, email, role, full_name, preferred_language`,
+        RETURNING user_id, email, role, full_name, preferred_language, password_hash`,
       [payload.sub],
     );
     if (!active.rowCount) throw new ApiError(401, 'SESSION_EXPIRED');
 
     const row = active.rows[0];
+    // Issued under an earlier password.
+    if (payload.pv !== passwordStamp(row.password_hash, config.jwtSecret)) throw new ApiError(401, 'SESSION_EXPIRED');
+    req.passwordHash = row.password_hash; // kept off req.user, which is logged and returned
     req.user = { ...actorFrom(row), fullName: row.full_name, preferredLanguage: row.preferred_language };
     next();
   }

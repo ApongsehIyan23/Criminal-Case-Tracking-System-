@@ -50,7 +50,7 @@ async function setup() {
   };
 
   const db = createDb(appUrl);
-  const config = { jwtSecret: 'test-secret-that-is-at-least-32-characters', appBaseUrl: 'http://app.test' };
+  const config = { jwtSecret: 'test-secret-that-is-at-least-32-characters', appBaseUrl: 'http://app.test', resetResponseMs: 0 };
   // The real storage service (and its encryption) over an in-memory bucket.
   const bucket = new Map();
   const s3 = {

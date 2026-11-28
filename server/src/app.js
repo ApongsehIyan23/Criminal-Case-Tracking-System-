@@ -25,7 +25,7 @@ function createApp({ db, config, mailer, neon, storage }) {
   app.use(express.json({ limit: '100kb' }));
 
   const auth = createAuthMiddleware({ db, config });
-  app.use('/api/auth', createAuthRouter({ db, config, auth }));
+  app.use('/api/auth', createAuthRouter({ db, config, auth, mailer }));
 
   const admin = express.Router();
   admin.use(auth.authenticate, auth.requireRole(ROLES.ADMIN));

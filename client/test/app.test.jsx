@@ -65,7 +65,7 @@ describe('sign in and routing', () => {
   test('shows plain-language validation for empty fields', () => {
     mockApi();
     open('/login');
-    fireEvent.click(button('Sign in'));
+    fireEvent.click(button('Log in'));
     expect(screen.getByText('Enter an email address.')).toBeInTheDocument();
     expect(screen.getByText('Enter your password.')).toBeInTheDocument();
   });
@@ -82,6 +82,89 @@ describe('sign in and routing', () => {
     open('/admin');
     expect(await screen.findByRole('heading', { name: 'Case Dashboard' })).toBeInTheDocument();
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+  });
+});
+
+describe('remember me', () => {
+  const signIn = (email) => {
+    if (email) fireEvent.change(screen.getByLabelText('Email'), { target: { value: email } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Password-123' } });
+    fireEvent.click(button('Log in'));
+  };
+  const routes = { 'POST /api/auth/login': { token: 't', sessionMinutes: 15, user: ADMIN } };
+
+  test('keeps only the email, and only when ticked', async () => {
+    mockApi(routes);
+    open('/login');
+    fireEvent.click(screen.getByLabelText('Remember me'));
+    signIn('admin@ccts.test');
+    await waitFor(() => expect(localStorage.getItem('ccts.email')).toBe('admin@ccts.test'));
+    expect(JSON.stringify({ ...localStorage })).not.toContain('Password-123');
+    expect(localStorage.getItem('ccts.token')).toBeNull();
+  });
+
+  test('pre-fills the remembered email and forgets it when unticked', () => {
+    localStorage.setItem('ccts.email', 'admin@ccts.test');
+    mockApi(routes);
+    open('/login');
+    expect(screen.getByLabelText('Email')).toHaveValue('admin@ccts.test');
+    expect(screen.getByLabelText('Password')).toHaveValue('');
+    expect(screen.getByLabelText('Remember me')).toBeChecked();
+    fireEvent.click(screen.getByLabelText('Remember me'));
+    expect(localStorage.getItem('ccts.email')).toBeNull();
+  });
+
+  test('stores nothing when left unticked', async () => {
+    mockApi(routes);
+    open('/login');
+    signIn('admin@ccts.test');
+    await screen.findByRole('button', { name: /log out/i });
+    expect(localStorage.getItem('ccts.email')).toBeNull();
+  });
+});
+
+describe('forgot password', () => {
+  const account = { email: 'new@ccts.test', fullName: 'New User', preferredLanguage: 'EN' };
+  const choose = async (password, confirm = password) => {
+    fireEvent.change(await screen.findByLabelText('New password'), { target: { value: password } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: confirm } });
+    fireEvent.click(button('Save new password'));
+  };
+
+  test('carries the typed email over and confirms without revealing whether it exists', async () => {
+    const calls = mockApi({ 'POST /api/auth/forgot-password': { status: 202, requested: true } });
+    open('/login');
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'someone@ccts.test' } });
+    fireEvent.click(screen.getByRole('link', { name: 'Forgot password?' }));
+    expect(screen.getByLabelText('Email')).toHaveValue('someone@ccts.test');
+    fireEvent.click(button('Send reset link'));
+    expect(await screen.findByText(en.forgot.sent)).toBeInTheDocument();
+    expect(calls.filter((c) => c.key === 'POST /api/auth/forgot-password')).toHaveLength(1);
+  });
+
+  test('asks for an email', () => {
+    mockApi();
+    open('/forgot-password');
+    fireEvent.click(button('Send reset link'));
+    expect(screen.getByText('Enter an email address.')).toBeInTheDocument();
+  });
+
+  test('saves a new password and returns to sign in with a confirmation', async () => {
+    mockApi({ 'GET /api/auth/password-reset/verify': account, 'POST /api/auth/password-reset': { reset: true } });
+    open('/reset-password?token=abc');
+    await choose('Password-123', 'Password-999');
+    expect(screen.getByText('Passwords do not match. Please enter the same password in both fields')).toBeInTheDocument();
+    await choose('Password-123');
+    expect(await screen.findByText(en.login.passwordReset)).toBeInTheDocument();
+    expect(sessionStorage.getItem('ccts.token')).toBeNull();
+  });
+
+  test('offers a new link when this one is not valid', async () => {
+    mockApi({ 'GET /api/auth/password-reset/verify': { status: 400, error: 'RESET_INVALID' } });
+    open('/reset-password?token=old');
+    expect(await screen.findByText(en.errors.RESET_INVALID)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('link', { name: 'Request a new link' }));
+    expect(button('Send reset link')).toBeInTheDocument();
   });
 });
 
@@ -242,9 +325,9 @@ describe('15-minute session countdown', () => {
     expect(calls.some((c) => c.key === 'POST /api/auth/session-expired')).toBe(true);
     expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Login' }));
-    fireEvent.change(await screen.findByLabelText('Email address'), { target: { value: 'admin@ccts.test' } });
+    fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'admin@ccts.test' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Password-123' } });
-    fireEvent.click(button('Sign in'));
+    fireEvent.click(button('Log in'));
     expect(await screen.findByRole('tab', { name: 'Global Audit Logs', selected: true })).toBeInTheDocument();
   });
 
