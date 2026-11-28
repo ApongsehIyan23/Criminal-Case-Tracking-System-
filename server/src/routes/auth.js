@@ -1,16 +1,24 @@
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const express = require('express');
-const { BCRYPT_COST, HOME_BY_ROLE, SESSION_MINUTES } = require('../constants');
+const {
+  BCRYPT_COST, HOME_BY_ROLE, SESSION_MINUTES, PASSWORD_RESET_COOLDOWN_SECONDS,
+} = require('../constants');
 const { ApiError } = require('../errors');
 const { bearerToken, endExpiredSession } = require('../middleware/auth');
 const { logAudit, ANONYMOUS_ACTOR } = require('../services/audit');
+const { passwordResetEmail } = require('../services/email');
+const { signResetToken, findResetUser } = require('../services/passwordReset');
 const { signToken, verifyToken } = require('../services/session');
-const { passwordProblem } = require('../validation');
+const { isValidEmail, passwordProblem } = require('../validation');
 
 const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
 // Compared against when there is no account, so response time does not reveal which emails exist.
 const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), BCRYPT_COST);
+
+// A request for a reset link takes at least this long, whether or not the account
+// exists, so the response time does not reveal which emails are registered.
+const RESET_RESPONSE_MS = 1500;
 
 // The browser countdown may reach zero slightly before the server's token expires.
 const EXPIRY_TOLERANCE_SECONDS = 60;
@@ -29,7 +37,7 @@ const PENDING_INVITATION_SQL = `
    WHERE i.token_hash = $1 AND i.used_at IS NULL AND i.expires_at > now()
      AND u.status = 'INVITATION_PENDING'`;
 
-function createAuthRouter({ db, config, auth }) {
+function createAuthRouter({ db, config, auth, mailer }) {
   const router = express.Router();
 
   router.post('/login', async (req, res) => {
@@ -73,7 +81,7 @@ function createAuthRouter({ db, config, auth }) {
     });
 
     res.json({
-      token: signToken(user.user_id, config.jwtSecret),
+      token: signToken(user.user_id, config.jwtSecret, user.password_hash),
       user: publicUser(session),
       redirectTo: HOME_BY_ROLE[user.role],
       sessionMinutes: SESSION_MINUTES,
@@ -87,7 +95,10 @@ function createAuthRouter({ db, config, auth }) {
   // "Continue session": the only way to get more time without signing in again.
   router.post('/continue', auth.authenticate, async (req, res) => {
     await logAudit(db, { actor: req.user, actionType: 'SESSION_EXTENDED', ip: req.ip });
-    res.json({ token: signToken(req.user.userId, config.jwtSecret), sessionMinutes: SESSION_MINUTES });
+    res.json({
+      token: signToken(req.user.userId, config.jwtSecret, req.passwordHash),
+      sessionMinutes: SESSION_MINUTES,
+    });
   });
 
   router.post('/logout', auth.authenticate, async (req, res) => {
@@ -194,6 +205,111 @@ function createAuthRouter({ db, config, auth }) {
     }
     // No session is issued: the user signs in from the login screen.
     res.json({ activated: true, redirectTo: '/login' });
+  });
+
+  // Emails a reset link to an active account. The answer is the same for every
+  // address; the audit log records what actually happened.
+  async function sendResetLink(email, ip) {
+    const issued = await db.transaction(async (client) => {
+      // The row lock stops concurrent requests from each sending an email.
+      const found = await client.query(
+        `SELECT user_id, email, password_hash, full_name, status, preferred_language
+           FROM users WHERE email = $1 FOR UPDATE`,
+        [email],
+      );
+      const user = found.rows[0];
+      let outcome = user?.status === 'ACTIVE' && user.password_hash ? 'LINK_ISSUED' : 'NO_ACTIVE_ACCOUNT';
+      if (outcome === 'LINK_ISSUED') {
+        const recent = await client.query(
+          `SELECT 1 FROM audit_logs
+            WHERE action_type = 'PASSWORD_RESET_REQUESTED' AND details->>'userId' = $1
+              AND details->>'outcome' = 'LINK_ISSUED' AND created_at > now() - make_interval(secs => $2)`,
+          [user.user_id, PASSWORD_RESET_COOLDOWN_SECONDS],
+        );
+        if (recent.rowCount) outcome = 'RECENTLY_SENT';
+      }
+      await logAudit(client, {
+        actor: ANONYMOUS_ACTOR,
+        actionType: 'PASSWORD_RESET_REQUESTED',
+        details: { attemptedEmail: email, userId: user?.user_id, outcome },
+        ip,
+      });
+      return outcome === 'LINK_ISSUED' ? user : null;
+    });
+    if (!issued) return;
+
+    try {
+      await mailer.send(passwordResetEmail({
+        to: issued.email,
+        fullName: issued.full_name,
+        language: issued.preferred_language,
+        link: `${config.appBaseUrl}/reset-password?token=${signResetToken(issued, config.jwtSecret)}`,
+      }));
+    } catch (err) {
+      console.error('Password reset email failed:', err.message);
+      await logAudit(db, {
+        actor: ANONYMOUS_ACTOR,
+        actionType: 'PASSWORD_RESET_EMAIL_FAILED',
+        details: { userId: issued.user_id, email: issued.email },
+        ip,
+      });
+    }
+  }
+
+  router.post('/forgot-password', async (req, res) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const problem = (!email && 'EMAIL_REQUIRED') || (!isValidEmail(email) && 'EMAIL_INVALID');
+    if (problem) throw new ApiError(400, 'VALIDATION_FAILED', { fields: { email: problem } });
+
+    const wait = new Promise((resolve) => { setTimeout(resolve, config.resetResponseMs ?? RESET_RESPONSE_MS); });
+    await Promise.all([sendResetLink(email, req.ip), wait]);
+    res.status(202).json({ requested: true });
+  });
+
+  const rejectReset = async (stage, ip) => {
+    await logAudit(db, { actor: ANONYMOUS_ACTOR, actionType: 'PASSWORD_RESET_FAILED', details: { stage }, ip });
+    throw new ApiError(400, 'RESET_INVALID');
+  };
+
+  router.get('/password-reset/verify', async (req, res) => {
+    const user = await findResetUser(db, req.query.token, config.jwtSecret);
+    if (!user) await rejectReset('VERIFY', req.ip);
+    await logAudit(db, {
+      actor: ANONYMOUS_ACTOR,
+      actionType: 'PASSWORD_RESET_LINK_VERIFIED',
+      details: { userId: user.user_id, email: user.email },
+      ip: req.ip,
+    });
+    res.json({ email: user.email, fullName: user.full_name, preferredLanguage: user.preferred_language });
+  });
+
+  router.post('/password-reset', async (req, res) => {
+    const { token, password, confirmPassword } = req.body || {};
+    const fields = {};
+    const problem = passwordProblem(password);
+    if (problem) fields.password = problem;
+    if (password !== confirmPassword) fields.confirmPassword = 'PASSWORDS_DO_NOT_MATCH';
+    if (Object.keys(fields).length) throw new ApiError(400, 'VALIDATION_FAILED', { fields });
+
+    const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
+    const changed = await db.transaction(async (client) => {
+      const user = await findResetUser(client, token, config.jwtSecret, { lock: true });
+      if (!user) return false;
+      // Clearing last_activity_at also signs the account out everywhere.
+      await client.query(
+        'UPDATE users SET password_hash = $2, last_activity_at = NULL, updated_at = now() WHERE user_id = $1',
+        [user.user_id, passwordHash],
+      );
+      await logAudit(client, {
+        actor: { userId: user.user_id, email: user.email, role: user.role },
+        actionType: 'PASSWORD_RESET_COMPLETED',
+        ip: req.ip,
+      });
+      return true;
+    });
+    if (!changed) await rejectReset('RESET', req.ip);
+    // No session is issued: the user signs in from the login screen.
+    res.json({ reset: true, redirectTo: '/login' });
   });
 
   return router;

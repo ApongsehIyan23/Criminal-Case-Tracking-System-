@@ -6,19 +6,21 @@ export const Icon = ({ name, className = '' }) => <i className={`fa-solid fa-${n
 // A labelled field with its inline validation message. `children` receives the
 // props that connect the control to the label and the error. `leading` and
 // `trailing` sit inside the control.
-export function Field({ label, error, leading, trailing, children }) {
+export function Field({ label, error, leading, trailing, required, children }) {
   const { t } = useLanguage();
   const id = useId();
   const describedBy = error ? `${id}-error` : undefined;
   return (
     <div>
-      <label htmlFor={id} className="field-label">{label}</label>
+      {/* The asterisk is drawn by CSS, so it is not part of the field's name. */}
+      <label htmlFor={id} className={`field-label ${required ? 'field-required' : ''}`}>{label}</label>
       <div className="relative">
         {leading && <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-neutral-500">{leading}</span>}
         {children({
           id,
           className: `input ${leading ? 'pl-9' : ''} ${trailing ? 'pr-16' : ''}`,
           'aria-invalid': Boolean(error),
+          'aria-required': required || undefined,
           'aria-describedby': describedBy,
         })}
         {trailing && <span className="absolute inset-y-0 right-2 flex items-center">{trailing}</span>}
@@ -28,14 +30,14 @@ export function Field({ label, error, leading, trailing, children }) {
   );
 }
 
-export function PasswordField({ label, error, value, onChange, autoComplete, visible, onToggle }) {
+export function PasswordField({ label, error, value, onChange, autoComplete, visible, onToggle, required }) {
   const { t } = useLanguage();
   const [own, setOwn] = useState(false);
   // Two fields can share one toggle by passing `visible`.
   const shown = visible ?? own;
   const toggle = visible === undefined ? () => setOwn(!own) : onToggle;
   return (
-    <Field label={label} error={error} trailing={toggle && (
+    <Field label={label} error={error} required={required} trailing={toggle && (
       <button type="button" className="text-xs font-medium underline" onClick={toggle}>
         {t(shown ? 'common.hide' : 'common.show')}
       </button>

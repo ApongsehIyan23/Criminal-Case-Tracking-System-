@@ -231,10 +231,10 @@ describe('P2 case initiation', () => {
     sessionStorage.setItem('ccts.draft.someone.police.newCase', '{"incidentTitle":"secret"}');
     mockApi({ 'POST /api/auth/login': { token: 't', sessionMinutes: 15, user: OFFICER } });
     open('/login');
-    type('Email address', 'officer@ccts.test');
+    type('Email', 'officer@ccts.test');
     type('Password', 'Very-secret-123');
     expect(JSON.stringify({ ...sessionStorage })).not.toContain('Very-secret-123');
-    fireEvent.click(button('Sign in'));
+    fireEvent.click(button('Log in'));
     await screen.findByRole('heading', { name: 'Case Dashboard' });
     expect(sessionStorage.getItem('ccts.draft.someone.police.newCase')).toBeNull();
     expect(sessionStorage.getItem('ccts.draft.guest.login.email')).toBeNull();

@@ -17,10 +17,12 @@ export default function Login() {
     return <Navigate to={resume ? state.from : home} replace />;
   }
 
-  const message = (state?.activated && t('login.activated')) || (status === 'expired' && t('login.expired'));
+  const message = (state?.activated && t('login.activated'))
+    || (state?.passwordReset && t('login.passwordReset'))
+    || (status === 'expired' && t('login.expired'));
 
   return (
-    <AuthShell title={t('login.title')}
+    <AuthShell title={t('login.title')} hideTitle
       banner={message && <Notice className="mb-4" title={t('common.confirmation')}>{message}</Notice>}>
       <LoginForm />
     </AuthShell>

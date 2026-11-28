@@ -2,6 +2,7 @@ const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { passwordStamp } = require('../src/services/session');
 const { setup, ADMIN } = require('./helpers');
 
 describe('authentication, sessions and RBAC', () => {
@@ -83,7 +84,9 @@ describe('authentication, sessions and RBAC', () => {
     // A token issued `age` seconds ago for a 15-minute session.
     const tokenAged = async (age) => {
       const iat = Math.floor(Date.now() / 1000) - age;
-      return jwt.sign({ iat, exp: iat + 900 }, ctx.config.jwtSecret, { subject: await userId() });
+      const { rows } = await ctx.owner.query('SELECT password_hash FROM users WHERE email = $1', [ADMIN.email]);
+      const pv = passwordStamp(rows[0].password_hash, ctx.config.jwtSecret);
+      return jwt.sign({ pv, iat, exp: iat + 900 }, ctx.config.jwtSecret, { subject: await userId() });
     };
     const backdateLogins = () => ctx.owner.query(
       `UPDATE audit_logs SET created_at = now() - interval '1 hour' WHERE action_type = 'USER_LOGIN'`);
