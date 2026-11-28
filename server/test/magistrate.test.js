@@ -127,6 +127,22 @@ describe('examining magistrate', () => {
       assert.strictEqual((await judge.get('/api/magistrate/queue?status=X')).status, 400);
       assert.strictEqual((await judge.get(`/api/magistrate/cases/${cases.hidden.caseId}`)).status, 404);
     });
+
+    test('counts each review tab, filters by custody and sorts', async () => {
+      const get = async (q) => (await judge.get(`/api/magistrate/queue?pageSize=20&${q}`)).body;
+      assert.deepStrictEqual((await get('')).counts, { ALL: 7, PENDING: 6, ISSUED: 1 });
+      const reviewed = await get('status=ISSUED');
+      assert.deepStrictEqual(reviewed.counts, { ALL: 7, PENDING: 6, ISSUED: 1 });
+      assert.ok(reviewed.items[0].createdAt);
+      assert.deepStrictEqual((await get('search=Nobody')).counts, { ALL: 2, PENDING: 2, ISSUED: 0 });
+      assert.deepStrictEqual((await get('custody=URGENT')).items.map((c) => c.incidentTitle),
+        ['Passed deadline', 'Urgent héritage']);
+      const ids = (await get('sort=caseId&dir=desc')).items.map((c) => c.caseId);
+      assert.deepStrictEqual(ids, [...ids].sort().reverse());
+      for (const bad of ['custody=X', 'sort=narrative', 'dir=sideways', 'status=constructor']) {
+        assert.strictEqual((await judge.get(`/api/magistrate/queue?${bad}`)).status, 400, bad);
+      }
+    });
   });
 
   describe('split-screen review', () => {

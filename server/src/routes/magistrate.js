@@ -9,9 +9,21 @@ const { logAudit } = require('../services/audit');
 const { objectKeyFrom } = require('../services/upload');
 const { isUuid } = require('../validation');
 const queries = require('./cases/queries');
+const { CUSTODY_FILTERS } = require('./cases/register');
 
 const VISIBLE = "c.status IN ('TRANSMITTED_TO_MAGISTRATE','MANDATE_ISSUED')";
 const REVIEW_STATUS = { PENDING: 'TRANSMITTED_TO_MAGISTRATE', ISSUED: 'MANDATE_ISSUED' };
+
+// Queue orders, written with fixed SQL only. By default cases awaiting review come
+// first: least custody time remaining, then those without custody by oldest
+// transmission. Completed cases follow.
+const PRIORITY = `(q.status = 'MANDATE_ISSUED'), q."custodyExpiresAt" ASC NULLS LAST, q."transmittedAt" ASC, q."caseId"`;
+const QUEUE_SORTS = {
+  priority: () => PRIORITY,
+  transmitted: (dir) => `q."transmittedAt" ${dir}, q."caseId"`,
+  caseId: (dir) => `q."caseId" ${dir}`,
+  evidence: (dir) => `q."evidenceCount" ${dir}, q."caseId"`,
+};
 
 function createMagistrateRouter({ db, storage, custody }) {
   const router = express.Router();
@@ -42,13 +54,19 @@ function createMagistrateRouter({ db, storage, custody }) {
     });
   });
 
-  // Cases awaiting review come first: least custody time remaining, then those without
-  // custody by oldest transmission. Completed cases follow.
   router.get('/queue', async (req, res) => {
     await custody.sync();
-    const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 200) : '';
-    const status = typeof req.query.status === 'string' ? req.query.status : '';
-    if (status && !REVIEW_STATUS[status]) throw new ApiError(400, 'VALIDATION_FAILED');
+    const text = (value) => (typeof value === 'string' ? value : '');
+    const search = text(req.query.search).trim().slice(0, 200);
+    const status = text(req.query.status);
+    const inCustody = text(req.query.custody);
+    const sort = text(req.query.sort) || 'priority';
+    const dir = text(req.query.dir) || 'asc';
+    if ((status && !Object.hasOwn(REVIEW_STATUS, status))
+      || (inCustody && !Object.hasOwn(CUSTODY_FILTERS, inCustody))
+      || !Object.hasOwn(QUEUE_SORTS, sort) || !['asc', 'desc'].includes(dir)) {
+      throw new ApiError(400, 'VALIDATION_FAILED');
+    }
     const { page, pageSize, offset } = parsePagination(req.query);
 
     const params = [];
@@ -60,35 +78,48 @@ function createMagistrateRouter({ db, storage, custody }) {
         OR EXISTS (SELECT 1 FROM case_participants p JOIN persons s USING (person_id)
                     WHERE p.case_id = c.case_id AND (s.full_name ILIKE ${p} OR s.national_id ILIKE ${p})))`);
     }
-    if (status) clauses.push(`c.status = $${params.push(REVIEW_STATUS[status])}`);
-    const from = `FROM criminal_case_files c
+    if (inCustody) clauses.push(CUSTODY_FILTERS[inCustody]);
+    const from = () => `FROM criminal_case_files c
       JOIN organizational_units u ON u.unit_id = c.originating_unit_id
      WHERE ${clauses.join(' AND ')}`;
 
-    const [rows, count] = await Promise.all([
+    // Tab counts follow the search and filter, but not the chosen tab.
+    const countSql = `SELECT c.status, count(*)::int AS n ${from()} GROUP BY c.status`;
+    const countParams = [...params];
+    if (status) clauses.push(`c.status = $${params.push(REVIEW_STATUS[status])}`);
+
+    const [rows, grouped] = await Promise.all([
       db.query(
         `SELECT * FROM (
-           SELECT ${queries.SUMMARY_COLUMNS}, c.transmitted_at AS "transmittedAt",
+           SELECT ${queries.SUMMARY_COLUMNS}, c.created_at AS "createdAt", c.transmitted_at AS "transmittedAt",
                   (SELECT s.full_name FROM case_participants p
                      JOIN persons s USING (person_id)
                      LEFT JOIN custody_countdown_timers t USING (participant_id)
                     WHERE p.case_id = c.case_id AND p.role = 'SUSPECT'
                     ORDER BY (t.status IN ${queries.OPEN_TIMERS}) DESC NULLS LAST, t.current_expires_at, s.full_name
                     LIMIT 1) AS "leadSuspect"
-             ${from}
+             ${from()}
          ) q
-         ORDER BY (q.status = 'MANDATE_ISSUED'), q."custodyExpiresAt" ASC NULLS LAST, q."transmittedAt" ASC, q."caseId"
+         ORDER BY ${QUEUE_SORTS[sort](dir === 'asc' ? 'ASC' : 'DESC')}
          LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
         [...params, pageSize, offset]),
-      db.query(`SELECT count(*)::int AS total ${from}`, params),
+      db.query(countSql, countParams),
     ]);
+    const counts = Object.fromEntries(Object.entries(REVIEW_STATUS)
+      .map(([name, value]) => [name, grouped.rows.find((row) => row.status === value)?.n || 0]));
+    counts.ALL = counts.PENDING + counts.ISSUED;
+    const filters = {
+      ...(search ? { search } : {}), ...(status ? { status } : {}), ...(inCustody ? { custody: inCustody } : {}),
+    };
     await logAudit(db, {
       actor: req.user,
-      actionType: search || status ? 'CASE_SEARCHED' : 'CASE_QUEUE_VIEWED',
-      details: { ...(search ? { search } : {}), ...(status ? { status } : {}), page, pageSize },
+      actionType: Object.keys(filters).length ? 'CASE_SEARCHED' : 'CASE_QUEUE_VIEWED',
+      details: { ...filters, page, pageSize },
       ip: req.ip,
     });
-    res.json({ ...pageEnvelope(rows.rows, count.rows[0].total, page, pageSize), serverNow: serverNow() });
+    res.json({
+      ...pageEnvelope(rows.rows, counts[status || 'ALL'], page, pageSize), counts, serverNow: serverNow(),
+    });
   });
 
   router.param('caseId', queries.caseIdParam);

@@ -37,7 +37,13 @@ function mockApi(overrides = {}) {
       kpis: { pendingReview: 6, urgentCustody: 4, mandatesIssued: 2, averageTurnaroundSeconds: 66240 },
       urgent: [card(1), card(2), card(3), card(4)], serverNow: NOW,
     },
-    'GET /api/magistrate/queue': { items: [], total: 12, serverNow: NOW },
+    'GET /api/magistrate/queue': {
+      items: [{
+        caseId: CASE, incidentTitle: 'Theft', unitName: 'Station', status: 'TRANSMITTED_TO_MAGISTRATE',
+        leadSuspect: 'Jean Test', custodyExpiresAt: later(1), evidenceCount: 2, createdAt: NOW, transmittedAt: NOW,
+      }],
+      total: 12, totalPages: 3, counts: { ALL: 12, PENDING: 9, ISSUED: 3 }, serverNow: NOW,
+    },
     [`GET /api/magistrate/cases/${CASE}`]: review(),
     [`POST /api/cases/${CASE}/mandate`]: { status: 201 },
     ...overrides,
@@ -72,14 +78,48 @@ describe('M1 dashboard', () => {
     expect(screen.getAllByTestId('urgent-card')).toHaveLength(1);
   });
 
-  test('the queue uses Pattern B and a filter change returns to page 1', async () => {
+  const queueCall = (calls) => calls.filter((c) => c.key === 'GET /api/magistrate/queue').at(-1).url;
+
+  test('the queue shows its rows, tab counts and a link to inspect', async () => {
+    mockApi();
+    open('/magistrate');
+    const table = await screen.findByRole('table', { name: 'Incoming Transmitted Cases Queue' });
+    const row = within(table).getAllByRole('row')[1];
+    expect(row).toHaveTextContent('Jean Test');
+    expect(row).toHaveTextContent('01:00:00');
+    expect(within(row).getByText('01:00:00')).toHaveClass('text-[#dc2626]');
+    expect(within(row).getByText('Pending Review')).toBeInTheDocument();
+    expect(within(row).getByRole('link', { name: 'Inspect' })).toHaveAttribute('href', `/magistrate/cases/${CASE}`);
+    expect(button('All Incoming 12')).toHaveAttribute('aria-pressed', 'true');
+    expect(button('Reviewed 3')).toBeInTheDocument();
+    expect(screen.getByTestId('results')).toHaveTextContent('of 12 results');
+  });
+
+  test('a tab, sort, filter or page size change returns to page 1', async () => {
     const calls = mockApi();
     open('/magistrate');
-    expect(await screen.findByText('Showing 1–5 of 12 cases')).toBeInTheDocument();
-    fireEvent.click(button('Page 2'));
-    await waitFor(() => expect(calls.at(-1).url).toContain('page=2'));
-    fireEvent.change(screen.getByLabelText('Review status'), { target: { value: 'PENDING' } });
-    await waitFor(() => expect(calls.at(-1).url).toContain('status=PENDING&page=1'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Page 2' }));
+    await waitFor(() => expect(queueCall(calls)).toContain('page=2'));
+    fireEvent.click(button(/^Pending Review/));
+    await waitFor(() => expect(queueCall(calls)).toContain('status=PENDING&sort=priority&dir=asc&page=1'));
+    fireEvent.click(button('Sort'));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Newest transmission' }));
+    await waitFor(() => expect(queueCall(calls)).toContain('sort=transmitted&dir=desc&page=1'));
+    fireEvent.click(button('Filter'));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Under 2 hours' }));
+    await waitFor(() => expect(queueCall(calls)).toContain('custody=URGENT'));
+    fireEvent.change(screen.getByLabelText('Rows per page'), { target: { value: '10' } });
+    await waitFor(() => expect(queueCall(calls)).toContain('page=1&pageSize=10'));
+  });
+
+  test('rows can be selected and cleared', async () => {
+    mockApi();
+    open('/magistrate');
+    fireEvent.click(await screen.findByLabelText('Select all cases on this page'));
+    expect(screen.getByLabelText(`Select case ${CASE}`)).toBeChecked();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    fireEvent.click(button('Clear'));
+    expect(screen.getByLabelText(`Select case ${CASE}`)).not.toBeChecked();
   });
 });
 

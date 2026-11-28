@@ -1,7 +1,8 @@
 // Status tabs with counts, and the Sort and Filter menus.
 import { useLanguage } from '../../../context/LanguageContext';
-import { BookmarkIcon, CheckCircleIcon, ClockIcon, FilterIcon, FolderIcon, SortIcon } from './icons';
-import Menu, { MenuHeading, MenuItem } from './Menu';
+import { BookmarkIcon, CheckCircleIcon, ClockIcon, FilterIcon, FolderIcon, SortIcon } from '../../../components/table/icons';
+import Menu, { MenuHeading, MenuItem } from '../../../components/table/Menu';
+import { TabBar } from '../../../components/table/parts';
 import { CUSTODY_FILTERS, RECORD_FILTERS, SORT_CHOICES } from './options';
 
 const TABS = [
@@ -17,24 +18,8 @@ export default function Toolbar({ view, counts, update }) {
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 pb-4">
-      <div role="group" aria-label={t('register.status')} className="flex flex-wrap items-center gap-6">
-        {TABS.map(([status, name, TabIcon]) => {
-          const active = view.status === status;
-          return (
-            <button key={name} type="button" aria-pressed={active} onClick={() => update({ status })}
-              className={`flex items-center gap-1.5 border-b-2 pb-0.5 ${
-                active ? 'border-[#1a1a1a] text-[#1a1a1a]' : 'border-transparent text-[#374151] opacity-60 hover:opacity-100'}`}>
-              <TabIcon />
-              <span className={`text-[13px] ${active ? 'font-semibold' : 'font-medium'}`}>{t(`register.tabs.${name}`)}</span>
-              {' '}
-              <span className={`rounded-[10px] px-[7px] py-px text-[11px] ${
-                active ? 'bg-[#1a1a1a] font-semibold text-white' : 'bg-[#f3f4f6] font-medium text-[#374151]'}`}>
-                {counts ? counts[status || 'ALL'] : '…'}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <TabBar label={t('register.status')} value={view.status} counts={counts} onChange={(status) => update({ status })}
+        tabs={TABS.map(([status, name, TabIcon]) => [status, t(`register.tabs.${name}`), TabIcon])} />
       <div className="flex items-center gap-2.5">
         <Menu buttonClassName="register-button" button={<><SortIcon />{t('register.sort')}</>}>
           {(close) => SORT_CHOICES.map(([name, sort, dir]) => (

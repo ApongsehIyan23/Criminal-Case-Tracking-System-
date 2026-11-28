@@ -116,6 +116,23 @@ describe('audit logs, pagination and CSV export', () => {
       assert.strictEqual(last.body.items.length, 2);
       assert.ok(!JSON.stringify(first.body).includes('password'));
     });
+
+    test('the user directory searches by name, email or role and filters by status', async () => {
+      const get = async (q) => (await admin.get(`/api/admin/users?${q}`)).body;
+      const all = await get('');
+      assert.strictEqual(all.counts.ALL, 12);
+      assert.strictEqual(all.counts.INVITATION_PENDING, 11);
+      assert.strictEqual((await get('search=u11%40ccts')).total, 1);
+      assert.strictEqual((await get('search=User+3')).total, 1);
+      // Role names match in English and in French.
+      assert.strictEqual((await get('search=examining')).total, 11);
+      assert.strictEqual((await get(`search=${encodeURIComponent('juge d')}`)).total, 11);
+      assert.strictEqual((await get('search=%25')).total, 0);
+      const active = await get('status=ACTIVE');
+      assert.deepStrictEqual([active.total, active.counts.ALL], [1, 12]);
+      assert.strictEqual((await admin.get('/api/admin/users?status=X')).status, 400);
+      assert.ok(await ctx.auditCount('USER_DIRECTORY_SEARCHED'));
+    });
   });
 
   describe('filters', () => {
