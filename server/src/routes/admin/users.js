@@ -7,6 +7,14 @@ const { invitationEmail } = require('../../services/email');
 const { parsePagination, pageEnvelope } = require('../../pagination');
 const { isValidEmail, isUuid } = require('../../validation');
 
+const STATUS_FILTERS = ['ACTIVE', 'INVITATION_PENDING'];
+// The role names shown on screen, so a search for one in either language matches.
+const ROLE_LABELS = {
+  SYSTEM_ADMINISTRATOR: ['System Administrator', 'Administrateur système'],
+  JUDICIAL_POLICE_OFFICER: ['Judicial Police Officer', 'Officier de police judiciaire'],
+  EXAMINING_MAGISTRATE: ['Examining Magistrate', "Juge d'instruction"],
+};
+
 function newToken() {
   const token = crypto.randomBytes(32).toString('hex');
   return { token, hash: crypto.createHash('sha256').update(token).digest('hex') };
@@ -153,23 +161,54 @@ function createUserRouter({ db, config, mailer }) {
     res.status(201).json({ created: results });
   });
 
+  // The user directory: search by name, email or role, status tabs and pages.
   router.get('/users', async (req, res) => {
+    const text = (value) => (typeof value === 'string' ? value.trim() : '');
+    const search = text(req.query.search).slice(0, 200);
+    const status = text(req.query.status);
+    if (status && !STATUS_FILTERS.includes(status)) throw new ApiError(400, 'VALIDATION_FAILED');
     const { page, pageSize, offset } = parsePagination(req.query);
-    const [rows, count] = await Promise.all([
+
+    const params = [];
+    const clauses = ['TRUE'];
+    if (search) {
+      const needle = search.toLocaleLowerCase('fr');
+      const roles = Object.keys(ROLE_LABELS)
+        .filter((role) => ROLE_LABELS[role].some((label) => label.toLocaleLowerCase('fr').includes(needle)));
+      const pattern = `$${params.push(`%${search.replace(/[\\%_]/g, '\\$&')}%`)}`;
+      clauses.push(`(u.full_name ILIKE ${pattern} OR u.email ILIKE ${pattern} OR u.role = ANY($${params.push(roles)}))`);
+    }
+    // Tab counts follow the search, but not the chosen tab.
+    const countSql = `SELECT u.status, count(*)::int AS n FROM users u WHERE ${clauses.join(' AND ')} GROUP BY u.status`;
+    const countParams = [...params];
+    if (status) clauses.push(`u.status = $${params.push(status)}`);
+
+    const [rows, grouped] = await Promise.all([
       db.query(
         `SELECT u.user_id AS "userId", u.full_name AS "fullName", u.email, u.role, u.status,
                 o.unit_name AS "unitName", u.created_at AS "createdAt",
                 (SELECT max(i.expires_at) FROM account_invitations i
                   WHERE i.user_id = u.user_id AND i.used_at IS NULL) AS "invitationExpiresAt"
            FROM users u LEFT JOIN organizational_units o ON o.unit_id = u.organizational_unit_id
+          WHERE ${clauses.join(' AND ')}
           ORDER BY u.created_at DESC, u.user_id
-          LIMIT $1 OFFSET $2`,
-        [pageSize, offset],
+          LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, pageSize, offset],
       ),
-      db.query('SELECT count(*)::int AS total FROM users'),
+      db.query(countSql, countParams),
     ]);
-    await logAudit(db, { actor: req.user, actionType: 'USER_DIRECTORY_VIEWED', details: { page, pageSize }, ip: req.ip });
-    res.json(pageEnvelope(rows.rows, count.rows[0].total, page, pageSize));
+    const counts = Object.fromEntries(STATUS_FILTERS.map((name) => [name, 0]));
+    grouped.rows.forEach((row) => { counts[row.status] = row.n; });
+    counts.ALL = grouped.rows.reduce((total, row) => total + row.n, 0);
+
+    const filters = { ...(search ? { search } : {}), ...(status ? { status } : {}) };
+    await logAudit(db, {
+      actor: req.user,
+      actionType: Object.keys(filters).length ? 'USER_DIRECTORY_SEARCHED' : 'USER_DIRECTORY_VIEWED',
+      details: { ...filters, page, pageSize },
+      ip: req.ip,
+    });
+    res.json({ ...pageEnvelope(rows.rows, counts[status || 'ALL'], page, pageSize), counts });
   });
 
   router.post('/users/:userId/resend-invitation', async (req, res) => {

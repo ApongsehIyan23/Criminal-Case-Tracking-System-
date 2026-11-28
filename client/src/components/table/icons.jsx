@@ -1,4 +1,4 @@
-// Icons from the "Active Case Files Register" design.
+// Icons from the data table designs.
 const Svg = ({ size = 16, children }) => (
   <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} fill="none" aria-hidden="true" className="shrink-0">
     {children}
@@ -53,4 +53,50 @@ export const ChevronLeftIcon = () => (
 );
 export const ChevronRightIcon = () => (
   <Svg size={14}><path d="M5 3l4 4-4 4" {...LINE} strokeLinejoin="round" /></Svg>
+);
+
+export const EnvelopeIcon = () => (
+  <Svg>
+    <rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M2 5l6 4 6-4" stroke="currentColor" strokeWidth="1.5" />
+  </Svg>
+);
+
+export const PeopleIcon = () => (
+  <Svg>
+    <circle cx="6" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" />
+    <circle cx="11" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M1 14c0-2.8 2.2-5 5-5M10 9c2.8 0 5 2.2 5 5" {...LINE} />
+  </Svg>
+);
+
+export const PersonPlusIcon = () => (
+  <Svg>
+    <circle cx="7" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M2 14c0-2.8 2.2-5 5-5" {...LINE} />
+    <path d="M12 7v4M10 9h4" {...LINE} />
+  </Svg>
+);
+
+export const InspectIcon = () => (
+  <Svg size={14}>
+    <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M5 7h4M7 5v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </Svg>
+);
+
+export const LockIcon = () => (
+  <Svg size={12}>
+    <rect x="2" y="4" width="8" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M4 4V3a2 2 0 014 0v1" stroke="currentColor" strokeWidth="1.2" />
+  </Svg>
+);
+
+export const RefreshIcon = () => <Svg size={14}><path d="M7 2v10M2 7a5 5 0 019.6-1.5" {...LINE} /></Svg>;
+
+export const ExportIcon = () => (
+  <Svg size={14}>
+    <path d="M7 2v6l3 2" {...LINE} />
+    <rect x="2" y="2" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.5" />
+  </Svg>
 );

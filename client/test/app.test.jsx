@@ -225,12 +225,48 @@ describe('administration console', () => {
     signedIn();
     const calls = mockApi();
     open('/admin');
-    expect(await screen.findByText('Showing 1–5 of 12 users')).toBeInTheDocument();
+    const range = (text) => waitFor(() => expect(screen.getByTestId('range')).toHaveTextContent(text));
+    await range('Showing 1–5 of 12 users');
     fireEvent.click(button('Page 3'));
-    expect(await screen.findByText('Showing 11–12 of 12 users')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Rows per page'), { target: { value: '10' } });
-    expect(await screen.findByText('Showing 1–10 of 12 users')).toBeInTheDocument();
+    await range('Showing 11–12 of 12 users');
+    // The selector above the table and the one under it are the same setting.
+    const [above, below] = screen.getAllByLabelText('Rows per page');
+    fireEvent.change(below, { target: { value: '10' } });
+    await range('Showing 1–10 of 12 users');
+    expect(above).toHaveValue('10');
     expect(calls.at(-1).url).toContain('page=1&pageSize=10');
+  });
+
+  test('the user directory shows statuses, tab counts and resends an expired invitation', async () => {
+    signedIn();
+    const user = (extra) => ({ role: 'EXAMINING_MAGISTRATE', unitName: null, ...extra });
+    const calls = mockApi({
+      'GET /api/admin/users': {
+        items: [
+          user({ userId: 'a', fullName: 'Active Person', email: 'a@ccts.test', status: 'ACTIVE' }),
+          user({
+            userId: 'b', fullName: 'Late Person', email: 'b@ccts.test', status: 'INVITATION_PENDING',
+            invitationExpiresAt: '2000-01-01T00:00:00Z',
+          }),
+        ],
+        total: 2, counts: { ALL: 2, ACTIVE: 1, INVITATION_PENDING: 1 },
+      },
+      'POST /api/admin/users/b/resend-invitation': { emailSent: true },
+    });
+    open('/admin');
+    const table = await screen.findByRole('table', { name: 'User directory' });
+    const [, active, late] = within(table).getAllByRole('row');
+    expect(within(active).getByText('Active')).toBeInTheDocument();
+    expect(within(active).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(late).getByText('Invitation pending')).toBeInTheDocument();
+    expect(within(late).getByText('Link expired')).toBeInTheDocument();
+    expect(button('All Users 2')).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(late).getByRole('button', { name: 'Resend invitation' }));
+    expect(await screen.findByText('A new invitation was sent to b@ccts.test.')).toBeInTheDocument();
+    fireEvent.click(button('Pending 1'));
+    await waitFor(() => expect(calls.at(-1).url).toContain('status=INVITATION_PENDING&page=1'));
+    fireEvent.change(screen.getByLabelText('Search users'), { target: { value: 'late' } });
+    await waitFor(() => expect(calls.at(-1).url).toContain('search=late'));
   });
 
   test('the audit view has no edit or delete controls', async () => {

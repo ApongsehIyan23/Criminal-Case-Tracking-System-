@@ -362,6 +362,121 @@
     opacity: 0.5;
   }
 
+  /* Incoming queue, audit log and user directory (their design). */
+  .grid-table {
+    font-family: "Inter Variable", Inter, system-ui, sans-serif;
+  }
+
+  .grid-row {
+    display: grid;
+    align-items: center;
+    border-bottom: 1px solid #f3f4f6;
+    padding: 0 20px;
+  }
+
+  .grid-row > * {
+    min-width: 0;
+    padding: 14px 8px 14px 0;
+    overflow-wrap: anywhere;
+    color: #374151;
+    font-size: 13px;
+  }
+
+  .grid-row > :only-child {
+    grid-column: 1 / -1;
+  }
+
+  .grid-head {
+    border-bottom-color: #e5e7eb;
+    background: #fafafa;
+  }
+
+  .grid-head > * {
+    padding-block: 12px;
+    color: #6b7280;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    overflow-wrap: normal;
+  }
+
+  .grid-body .grid-row:nth-child(even) {
+    background: #fafbfc;
+  }
+
+  .grid-body .grid-row:last-child {
+    border-bottom: 0;
+  }
+
+  .table-mono {
+    font-family: "JetBrains Mono Variable", "JetBrains Mono", "Courier New", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .table-card {
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: white;
+  }
+
+  .table-button-dark {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: 8px;
+    background: #1a1a1a;
+    padding: 8px 14px;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .table-button-dark:hover {
+    background: #2d2d2d;
+  }
+
+  .table-button-dark:disabled {
+    opacity: 0.6;
+  }
+
+  .table-label {
+    display: block;
+    margin-bottom: 4px;
+    color: #6b7280;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .table-field {
+    height: 38px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+    padding: 0 14px;
+    color: #374151;
+    font-size: 13px;
+  }
+
+  .table-field[aria-invalid="true"] {
+    border-color: var(--color-red-600);
+  }
+
+  .table-link {
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .table-link:hover {
+    color: #1d4ed8;
+  }
+
+  .table-link:disabled {
+    opacity: 0.5;
+  }
+
   /* Digital case initiation (its design). */
   .case-wizard {
     font-family: "Inter Variable", Inter, system-ui, sans-serif;

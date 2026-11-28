@@ -1,9 +1,9 @@
-import { useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../../context/LanguageContext';
 import { formatRemaining, isUrgent } from '../../../lib/custody';
-import { DotsIcon, PersonIcon } from './icons';
-import Menu, { MenuItem } from './Menu';
+import { DotsIcon, PersonIcon } from '../../../components/table/icons';
+import Menu, { MenuItem } from '../../../components/table/Menu';
+import { Badge, SelectAll } from '../../../components/table/parts';
 import { COLUMNS, TABLE_WIDTH } from './options';
 
 const RECORD_COLORS = { ACTIVE: 'bg-[#fef3c7] text-[#b45309]', CLOSED: 'bg-[#dcfce7] text-[#15803d]' };
@@ -12,19 +12,6 @@ const DOCKET_COLORS = {
   TRANSMITTED_TO_MAGISTRATE: 'bg-[#e0f2fe] text-[#0369a1]',
   MANDATE_ISSUED: 'bg-[#ede9fe] text-[#7c3aed]',
 };
-const Badge = ({ colors, children }) => (
-  <span className={`inline-block rounded-xl px-2.5 py-[3px] text-[11px] font-medium ${colors}`}>{children}</span>
-);
-
-function SelectAll({ checked, partly, disabled, onChange, label }) {
-  const box = useRef(null);
-  useEffect(() => { box.current.indeterminate = partly; }, [partly]);
-  return (
-    <input ref={box} type="checkbox" className="register-check" aria-label={label} checked={checked}
-      disabled={disabled} onChange={onChange} />
-  );
-}
-
 function RowActions({ item }) {
   const { t } = useLanguage();
   const navigate = useNavigate();

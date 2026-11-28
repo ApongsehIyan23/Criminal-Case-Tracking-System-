@@ -79,4 +79,4 @@ async function listRegister(db, { search, status, record, custody, sort, dir, pa
   return { ...pageEnvelope(rows.rows, counts[status || 'ALL'], page, pageSize), counts };
 }
 
-module.exports = { parseRegister, listRegister };
+module.exports = { CUSTODY_FILTERS, parseRegister, listRegister };
