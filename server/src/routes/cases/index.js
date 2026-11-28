@@ -1,14 +1,12 @@
 // Judicial police case routes. There is deliberately no route that deletes a case.
 const express = require('express');
-const { CASE_STATUSES, EVIDENCE_LIMIT_BYTES } = require('../../constants');
+const { EVIDENCE_LIMIT_BYTES } = require('../../constants');
 const { ApiError } = require('../../errors');
-const { parsePagination, pageEnvelope } = require('../../pagination');
 const { logAudit } = require('../../services/audit');
 const { createUploadHandler } = require('./evidence');
 const { createCaseHandler } = require('./intake');
 const queries = require('./queries');
-
-const { SUMMARY_COLUMNS } = queries;
+const { listRegister, parseRegister } = require('./register');
 
 function createCaseRouter({ db, storage, custody }) {
   const router = express.Router();
@@ -45,42 +43,19 @@ function createCaseRouter({ db, storage, custody }) {
     res.json({ items: rows.rows });
   });
 
-  // Active Case Files Register: search plus status filter, paginated.
+  // Active Case Files Register.
   router.get('/', async (req, res) => {
-    const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 200) : '';
-    const status = typeof req.query.status === 'string' ? req.query.status : '';
-    if (status && !CASE_STATUSES.includes(status)) throw new ApiError(400, 'VALIDATION_FAILED');
-    const { page, pageSize, offset } = parsePagination(req.query);
-
-    const params = [];
-    const clauses = ['TRUE'];
-    if (search) {
-      const p = `$${params.push(`%${search.replace(/[\\%_]/g, '\\$&')}%`)}`;
-      clauses.push(`(c.case_id ILIKE ${p} OR c.incident_title ILIKE ${p} OR c.narrative ILIKE ${p}
-        OR o.label_en ILIKE ${p} OR o.label_fr ILIKE ${p}
-        OR EXISTS (SELECT 1 FROM case_participants p JOIN persons s USING (person_id)
-                    WHERE p.case_id = c.case_id AND (s.full_name ILIKE ${p} OR s.national_id ILIKE ${p})))`);
-    }
-    if (status) clauses.push(`c.status = $${params.push(status)}`);
-    const from = `FROM criminal_case_files c
-      JOIN organizational_units u ON u.unit_id = c.originating_unit_id
-      JOIN offense_categories o ON o.offense_category_id = c.offense_category_id
-     WHERE ${clauses.join(' AND ')}`;
-
-    const [rows, count] = await Promise.all([
-      db.query(
-        `SELECT ${SUMMARY_COLUMNS} ${from} ORDER BY c.created_at DESC, c.case_id DESC
-          LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-        [...params, pageSize, offset]),
-      db.query(`SELECT count(*)::int AS total ${from}`, params),
-    ]);
+    const view = parseRegister(req.query);
+    const result = await listRegister(db, view);
+    const { search, status, record, custody, sort, dir, page, pageSize } = view;
+    const chosen = Object.fromEntries(Object.entries({ search, status, record, custody }).filter(([, v]) => v));
     await logAudit(db, {
       actor: req.user,
-      actionType: search || status ? 'CASE_SEARCHED' : 'CASE_REGISTER_VIEWED',
-      details: { ...(search ? { search } : {}), ...(status ? { status } : {}), page, pageSize },
+      actionType: Object.keys(chosen).length ? 'CASE_SEARCHED' : 'CASE_REGISTER_VIEWED',
+      details: { ...chosen, sort, dir, page, pageSize },
       ip: req.ip,
     });
-    res.json({ ...pageEnvelope(rows.rows, count.rows[0].total, page, pageSize), serverNow: serverNow() });
+    res.json({ ...result, serverNow: serverNow() });
   });
 
   router.post('/', createCaseHandler({ db }));

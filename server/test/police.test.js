@@ -321,6 +321,72 @@ describe('judicial police', () => {
       assert.ok((await ctx.auditCount('CASE_SEARCHED')) >= 5);
     });
 
+    test('counts the status tabs, filters and sorts the register', async () => {
+      const list = async (query = '') => (await officer.get(`/api/cases?pageSize=20${query}`)).body;
+      const all = await list();
+      const { counts } = all;
+      assert.strictEqual(counts.ALL, all.total);
+      assert.strictEqual(counts.ALL,
+        counts.IN_INVESTIGATION + counts.TRANSMITTED_TO_MAGISTRATE + counts.MANDATE_ISSUED);
+      assert.ok(all.items.every((c) => c.createdAt && ['ACTIVE', 'CLOSED'].includes(c.record)));
+
+      const tab = await list('&status=TRANSMITTED_TO_MAGISTRATE');
+      assert.strictEqual(tab.total, counts.TRANSMITTED_TO_MAGISTRATE);
+      assert.deepStrictEqual(tab.counts, counts, 'choosing a tab keeps every tab count');
+
+      const ids = (body) => body.items.map((c) => c.caseId);
+      const ascending = ids(await list('&sort=caseId&dir=asc'));
+      assert.deepStrictEqual(ascending, [...ascending].sort());
+      const descending = ids(await list('&sort=caseId&dir=desc'));
+      assert.deepStrictEqual(descending, [...descending].sort().reverse());
+      assert.ok(ascending[0] < descending[0]);
+      const evidence = (await list('&sort=evidence&dir=desc')).items.map((c) => c.evidenceCount);
+      assert.deepStrictEqual(evidence, [...evidence].sort((a, b) => b - a));
+      const timers = (await list('&sort=timer&dir=asc')).items.map((c) => c.custodyExpiresAt);
+      const running = timers.filter(Boolean);
+      assert.deepStrictEqual(timers, [...[...running].sort(), ...timers.filter((v) => !v)], 'no timer sorts last');
+      assert.strictEqual((await list('&sort=record&dir=asc')).total, all.total);
+
+      const inCustody = await list('&custody=IN_CUSTODY');
+      const none = await list('&custody=NONE');
+      assert.strictEqual(inCustody.total + none.total, all.total);
+      assert.ok(inCustody.total > 0 && none.total > 0);
+      assert.ok(inCustody.items.every((c) => c.custodyExpiresAt));
+      assert.ok(none.items.every((c) => !c.custodyExpiresAt));
+      assert.ok((await list('&custody=URGENT')).items
+        .every((c) => Date.parse(c.custodyExpiresAt) < Date.now() + 2 * 3600000));
+
+      for (const bad of ['sort=drop', 'dir=up', 'record=OPEN', 'custody=__proto__', 'status=NOPE', 'sort=toString']) {
+        assert.strictEqual((await officer.get(`/api/cases?${bad}`)).status, 400, bad);
+      }
+    });
+
+    test('closes a case only when ruled and no custody timer is open', async () => {
+      const { rows } = await ctx.owner.query(
+        `SELECT p.case_id FROM custody_countdown_timers t JOIN case_participants p USING (participant_id)
+          WHERE t.status IN ('ACTIVE','EXTENDED','EXPIRED') LIMIT 1`);
+      const caseId = rows[0].case_id;
+      const before = (await ctx.owner.query('SELECT status FROM criminal_case_files WHERE case_id = $1', [caseId])).rows[0];
+      const timers = (await ctx.owner.query(
+        `SELECT t.timer_id, t.status FROM custody_countdown_timers t JOIN case_participants p USING (participant_id)
+          WHERE p.case_id = $1`, [caseId])).rows;
+      const record = async () => (await officer.get(`/api/cases?search=${caseId}`)).body.items[0].record;
+
+      await ctx.owner.query(`UPDATE criminal_case_files SET status = 'MANDATE_ISSUED' WHERE case_id = $1`, [caseId]);
+      assert.strictEqual(await record(), 'ACTIVE', 'custody still open');
+      for (const timer of timers) {
+        await ctx.owner.query(`UPDATE custody_countdown_timers SET status = 'RELEASED' WHERE timer_id = $1`, [timer.timer_id]);
+      }
+      assert.strictEqual(await record(), 'CLOSED');
+      assert.ok((await officer.get('/api/cases?record=CLOSED')).body.items.some((c) => c.caseId === caseId));
+      assert.ok(!(await officer.get('/api/cases?record=ACTIVE&pageSize=20')).body.items.some((c) => c.caseId === caseId));
+
+      await ctx.owner.query('UPDATE criminal_case_files SET status = $2 WHERE case_id = $1', [caseId, before.status]);
+      for (const timer of timers) {
+        await ctx.owner.query('UPDATE custody_countdown_timers SET status = $2 WHERE timer_id = $1', [timer.timer_id, timer.status]);
+      }
+    });
+
     test('opening a docket logs access and returns the trail and any mandate', async () => {
       const caseId = await createCase({ participants: [suspect('CM-777')] });
       const before = await officer.get(`/api/cases/${caseId}`);
