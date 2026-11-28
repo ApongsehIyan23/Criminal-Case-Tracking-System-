@@ -31,7 +31,10 @@ function mockApi(overrides = {}) {
     'GET /api/auth/me': { user: OFFICER },
     'GET /api/notifications': { items: [] },
     'GET /api/cases/dashboard': { custody: [card(1, 1.5), card(2, 10), card(3, 20), card(4, 30)], totalCases: 7, serverNow: NOW },
-    'GET /api/cases': { items: [], total: 7, serverNow: NOW },
+    'GET /api/cases': {
+      items: [], total: 7, totalPages: 2, serverNow: NOW,
+      counts: { ALL: 7, IN_INVESTIGATION: 7, TRANSMITTED_TO_MAGISTRATE: 0, MANDATE_ISSUED: 0 },
+    },
     'GET /api/cases/reference': {
       offenses: [{ offenseCategoryId: 'o1', labelEn: 'Theft', labelFr: 'Vol' }],
       units: [{ unitId: 'u1', unitName: 'Central Station' }], officerUnitId: 'u1',
@@ -98,6 +101,81 @@ describe('P1 dashboard', () => {
 });
 
 describe('Cases page', () => {
+  const row = (n, extra = {}) => ({
+    caseId: `CM-MFD-2026-000${n}`, incidentTitle: `Incident ${n}`, suspects: [`Suspect ${n}`], evidenceCount: n,
+    status: 'IN_INVESTIGATION', record: 'ACTIVE', createdAt: NOW, custodyExpiresAt: null, ...extra,
+  });
+  const listing = {
+    items: [row(1, { custodyExpiresAt: later(1.5) }), row(2, { custodyExpiresAt: later(10) }),
+      row(3, { status: 'MANDATE_ISSUED', record: 'CLOSED' })],
+    total: 7, totalPages: 2, serverNow: NOW,
+    counts: { ALL: 7, IN_INVESTIGATION: 4, TRANSMITTED_TO_MAGISTRATE: 2, MANDATE_ISSUED: 1 },
+  };
+  const start = async () => {
+    signIn();
+    const calls = mockApi({ 'GET /api/cases': listing, 'GET /api/cases/CM-MFD-2026-0001': docket() });
+    open('/police/cases');
+    await screen.findByText('Incident 1');
+    return calls;
+  };
+  const lastList = (calls) => calls.filter((c) => c.url.startsWith('/api/cases?')).at(-1).url;
+  const line = (n) => screen.getByRole('link', { name: `CM-MFD-2026-000${n}` }).closest('tr');
+
+  test('shows tab counts, badges, and red only under 2 hours', async () => {
+    await start();
+    expect(button(/All Cases 7/)).toHaveAttribute('aria-pressed', 'true');
+    expect(button(/Transmitted 2/)).toBeInTheDocument();
+    expect(screen.getByTestId('results')).toHaveTextContent('of 7 results');
+    expect(within(line(1)).getByText(/^01:/)).toHaveClass('!text-[#dc2626]');
+    expect(within(line(2)).getByText(/^(09|10):/)).not.toHaveClass('!text-[#dc2626]');
+    expect(within(line(3)).getByText('Closed')).toBeInTheDocument();
+    expect(within(line(3)).getByText('Mandate Issued')).toBeInTheDocument();
+  });
+
+  test('tabs, column headers, sort and filter menus query the server from page 1', async () => {
+    const calls = await start();
+    fireEvent.click(button('Page 2'));
+    await waitFor(() => expect(lastList(calls)).toContain('page=2'));
+    fireEvent.click(button(/In Investigation 4/));
+    await waitFor(() => expect(lastList(calls)).toContain('status=IN_INVESTIGATION&sort=created&dir=desc&page=1'));
+    fireEvent.click(button(/Evidence/));
+    await waitFor(() => expect(lastList(calls)).toContain('sort=evidence&dir=asc'));
+    fireEvent.click(button(/Evidence/));
+    await waitFor(() => expect(lastList(calls)).toContain('sort=evidence&dir=desc'));
+    fireEvent.click(button('Sort'));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Least custody time' }));
+    await waitFor(() => expect(lastList(calls)).toContain('sort=timer&dir=asc'));
+    fireEvent.click(button('Filter'));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Closed' }));
+    await waitFor(() => expect(lastList(calls)).toContain('record=CLOSED'));
+    fireEvent.change(screen.getByLabelText('Rows per page'), { target: { value: '10' } });
+    await waitFor(() => expect(lastList(calls)).toContain('page=1&pageSize=10'));
+  });
+
+  test('selects rows, one or all', async () => {
+    await start();
+    fireEvent.click(screen.getByLabelText('Select case CM-MFD-2026-0002'));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Select all cases on this page'));
+    expect(screen.getByText('3 selected')).toBeInTheDocument();
+    fireEvent.click(button('Clear'));
+    expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+  });
+
+  test('the row menu offers only real actions and opens the case', async () => {
+    await start();
+    fireEvent.click(button('Actions for case CM-MFD-2026-0003'));
+    expect(screen.queryByRole('menuitem', { name: /Transmit/ })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    fireEvent.click(button('Actions for case CM-MFD-2026-0001'));
+    expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual(
+      ['Open Case', 'Digital Evidence', 'Custody & Alerts', 'Case Audit Trail', 'Transmit Case to Magistrate']);
+    expect(screen.queryByRole('menuitem', { name: /Delete|Edit/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open Case' }));
+    expect(await screen.findByRole('tab', { name: 'Overview & Participants' })).toBeInTheDocument();
+  });
+
   test('searches the register and returns to page 1', async () => {
     signIn();
     const calls = mockApi();
@@ -106,7 +184,7 @@ describe('Cases page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Page 2' }));
     await waitFor(() => expect(calls.at(-1).url).toContain('page=2'));
     type('Search cases', 'vol');
-    await waitFor(() => expect(calls.at(-1).url).toContain('search=vol&page=1'));
+    await waitFor(() => expect(calls.at(-1).url).toContain('search=vol&sort=created&dir=desc&page=1'));
   });
 });
 

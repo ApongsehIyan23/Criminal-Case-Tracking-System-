@@ -213,6 +213,155 @@
     opacity: 0.6;
   }
 
+  /* Active Case Files Register (its design). It fills the screen. */
+  .register-screen {
+    --register-scale: 1;
+    min-height: calc((100vh - 2.5rem) / var(--register-scale));
+    zoom: var(--register-scale);
+  }
+
+  /* Larger screens show the same design proportionally bigger. */
+  @media (min-width: 1600px) and (min-height: 850px) {
+    .register-screen {
+      --register-scale: 1.15;
+    }
+  }
+
+  .register {
+    font-family: "Inter Variable", Inter, system-ui, sans-serif;
+  }
+
+  .register-button {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+    padding: 7px 14px;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .register-button:hover {
+    background: #f9fafb;
+  }
+
+  .register-search {
+    display: flex;
+    width: 280px;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f9fafb;
+    padding: 8px 14px;
+  }
+
+  .register-search:focus-within {
+    border-color: #1a1a1a;
+  }
+
+  .register-search input {
+    width: 100%;
+    background: transparent;
+    color: #1a1a1a;
+    font-size: 13px;
+    outline: none;
+  }
+
+  .register-search input::placeholder {
+    color: #9ca3af;
+  }
+
+  .register-table {
+    table-layout: fixed;
+  }
+
+  .register-table th {
+    border-bottom: 1px solid #e5e7eb;
+    background: #fafafa;
+    padding: 12px 0;
+    color: #6b7280;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+    white-space: normal;
+  }
+
+  .register-table th button {
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
+  .register-table td {
+    height: 62px;
+    border-bottom: 1px solid #f3f4f6;
+    padding: 14px 0;
+    color: #374151;
+    font-size: 13px;
+  }
+
+  .register-table tr > :first-child {
+    padding-left: 20px;
+  }
+
+  .register-table tr > :last-child {
+    padding-right: 20px;
+    text-align: center;
+  }
+
+  .register-table tbody tr:nth-child(even) {
+    background: #fafbfc;
+  }
+
+  .register-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  /* With five rows, they grow to make use of the screen's height. */
+  .register-table[data-roomy="true"] tbody td {
+    height: clamp(62px, 11vh, 96px);
+  }
+
+  .register-table td.register-timer {
+    font-family: "JetBrains Mono Variable", "JetBrains Mono", "Courier New", monospace;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .register-check {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: #1a1a1a;
+  }
+
+  .register-page {
+    display: flex;
+    width: 32px;
+    height: 32px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: white;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .register-page[aria-current="page"] {
+    border-color: #1a1a1a;
+    background: #1a1a1a;
+    color: white;
+    font-weight: 600;
+  }
+
+  .register-page:disabled {
+    opacity: 0.5;
+  }
+
   /* Digital case initiation (its design). */
   .case-wizard {
     font-family: "Inter Variable", Inter, system-ui, sans-serif;
