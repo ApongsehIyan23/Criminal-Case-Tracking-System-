@@ -213,6 +213,93 @@
     opacity: 0.6;
   }
 
+  /* Digital case initiation (its design). */
+  .case-wizard {
+    font-family: "Inter Variable", Inter, system-ui, sans-serif;
+  }
+
+  .case-wizard .field-label {
+    margin-bottom: 6px;
+    color: #374151;
+    font-size: 13px;
+  }
+
+  .case-wizard .input {
+    height: auto;
+    min-height: 46px;
+    border: 1.5px solid #d1d5db;
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: #1a1a1a;
+    outline: none;
+  }
+
+  .case-wizard select.input {
+    padding-block: 11px;
+  }
+
+  .case-wizard .input::placeholder,
+  .case-wizard .input[data-empty="true"] {
+    color: #6b7280;
+  }
+
+  .case-wizard .input option {
+    color: #1a1a1a;
+  }
+
+  .case-wizard textarea.input {
+    min-height: 200px;
+    resize: vertical;
+    padding: 14px;
+    line-height: 1.6;
+  }
+
+  .case-wizard .input:focus {
+    border-color: #2563eb;
+    outline: none;
+  }
+
+  .case-wizard .input[aria-invalid="true"] {
+    border-color: var(--color-red-600);
+  }
+
+  .case-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 8px;
+    padding: 12px 32px;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background-color 0.15s;
+  }
+
+  .case-button:disabled {
+    opacity: 0.6;
+  }
+
+  .case-button-outline {
+    border: 1.5px solid #d1d5db;
+    background: white;
+    color: #374151;
+  }
+
+  .case-button-outline:hover {
+    background: #f9fafb;
+  }
+
+  .case-link {
+    color: #2563eb;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .case-link:hover {
+    color: #1d4ed8;
+  }
+
   .field-label {
     margin-bottom: 0.375rem;
     display: block;

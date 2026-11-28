@@ -179,24 +179,136 @@ describe('sidebar navigation', () => {
 });
 
 describe('P2 case initiation', () => {
+  const next = () => fireEvent.click(button('Next Step'));
+  const heading = (name) => screen.getByRole('heading', { level: 2, name });
+  const start = async () => {
+    await screen.findByLabelText('Incident Title');
+    await screen.findByRole('option', { name: 'Theft' });
+  };
+  const fillIncident = () => {
+    type('Incident Title', 'Market theft');
+    type('Offense Type', 'o1');
+    type('Incident Date & Time', '2026-01-15T14:30');
+  };
+  const toParticipants = async () => {
+    await start();
+    fillIncident();
+    next();
+    type('Incident Narrative', 'Sac volé at the market');
+    next();
+  };
+
+  test('checks each step before moving on', async () => {
+    signIn();
+    mockApi();
+    open('/police/cases/new');
+    await start();
+    next();
+    expect(heading('Incident Details')).toBeInTheDocument();
+    expect(screen.getByText('Enter an incident title.')).toBeInTheDocument();
+    expect(screen.getByText('Choose an offense type.')).toBeInTheDocument();
+    fillIncident();
+    type('Incident Date & Time', '2999-01-01T10:00');
+    next();
+    expect(screen.getByText('The incident date cannot be in the future.')).toBeInTheDocument();
+  });
+
+  test('shows progress and keeps entries when going back', async () => {
+    signIn();
+    mockApi();
+    open('/police/cases/new');
+    await toParticipants();
+    const steps = within(screen.getByRole('list', { name: 'Progress' })).getAllByRole('listitem');
+    expect(steps.map((s) => s.getAttribute('data-state'))).toEqual(['done', 'done', 'active', 'upcoming']);
+    expect(screen.getByText('Step 3')).toBeInTheDocument();
+    fireEvent.click(button('Previous'));
+    expect(screen.getByLabelText('Incident Narrative')).toHaveValue('Sac volé at the market');
+  });
+
   test('blocks a detained suspect without an ID using the exact message', async () => {
     signIn();
     const calls = mockApi();
     open('/police/cases/new');
-    await screen.findByLabelText('Incident Title');
+    await toParticipants();
+    type('Full Name', 'Jean Doe');
     fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(button('Save & Create Case Docket'));
+    next();
     expect(screen.getByText('Suspect National ID is required to initiate a custody timer')).toBeInTheDocument();
+    expect(heading('Participant Registration')).toBeInTheDocument();
     expect(calls.some((c) => c.key === 'POST /api/cases')).toBe(false);
   });
 
-  test('keeps everything typed across a page refresh', async () => {
+  test('offers custody only for suspects, and removes added participants', async () => {
+    signIn();
+    mockApi();
+    open('/police/cases/new');
+    await toParticipants();
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    type('Participant Role', 'VICTIM');
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    fireEvent.click(button('Add Another Participant'));
+    expect(screen.getAllByLabelText('Full Name')).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[1]);
+    expect(screen.getAllByLabelText('Full Name')).toHaveLength(1);
+  });
+
+  test('reviews everything, allows editing, then creates the docket once', async () => {
+    signIn();
+    const calls = mockApi({
+      'POST /api/cases': { status: 201, caseId: 'CM-MFD-2026-0001', custodyTimers: 1, nameMismatches: [] },
+      'GET /api/cases/CM-MFD-2026-0001': docket(),
+    });
+    open('/police/cases/new');
+    await toParticipants();
+    type('Full Name', 'Jean Doe');
+    type('National ID Number', '12345');
+    fireEvent.click(screen.getByRole('checkbox'));
+    next();
+    for (const text of ['Market theft', 'Theft', '01/15/2026, 14:30', 'Central Station', 'Sac volé at the market',
+      'Jean Doe', '12345', 'Yes']) {
+      expect(screen.getByText(text)).toBeInTheDocument();
+    }
+    expect(calls.some((c) => c.key === 'POST /api/cases')).toBe(false);
+    fireEvent.click(button('Edit Incident Details'));
+    expect(screen.getByLabelText('Incident Title')).toHaveValue('Market theft');
+    next();
+    next();
+    next();
+    // The second click of a double click is ignored.
+    fireEvent.click(button('Save & Create Case Docket'), { detail: 2 });
+    expect(calls.some((c) => c.key === 'POST /api/cases')).toBe(false);
+    fireEvent.click(button('Save & Create Case Docket'), { detail: 1 });
+    await waitFor(() => expect(screen.getByRole('heading', { name: /CM-MFD-2026-0001/ })).toBeInTheDocument());
+    const posted = calls.filter((c) => c.key === 'POST /api/cases');
+    expect(posted).toHaveLength(1);
+    expect(JSON.parse(posted[0].body)).toMatchObject({
+      incidentDatetime: '2026-01-15T14:30:00+01:00', originatingUnitId: 'u1',
+      participants: [{ role: 'SUSPECT', fullName: 'Jean Doe', nationalId: '12345', detained: true }],
+    });
+    expect(sessionStorage.getItem('ccts.draft.p1.police.newCase.step')).not.toBe('4');
+  });
+
+  test('returns to the step the server refuses', async () => {
+    signIn();
+    mockApi({
+      'POST /api/cases': {
+        status: 400, error: 'VALIDATION_FAILED', fields: { originatingUnitId: 'STATION_REQUIRED' }, rows: [],
+      },
+    });
+    open('/police/cases/new');
+    await toParticipants();
+    type('Full Name', 'Jean Doe');
+    next();
+    fireEvent.click(button('Save & Create Case Docket'));
+    expect(await screen.findByText('Choose the police station or brigade.')).toBeInTheDocument();
+    expect(heading('Incident Details')).toBeInTheDocument();
+  });
+
+  test('keeps everything typed, and the step, across a page refresh', async () => {
     signIn();
     mockApi();
     const first = open('/police/cases/new');
-    await screen.findByLabelText('Incident Title');
-    type('Incident Title', 'Market theft');
-    type('Incident Narrative', 'Sac volé');
+    await toParticipants();
     type('Full Name', 'Jean Doe');
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(button('Add Another Participant'));
@@ -204,19 +316,18 @@ describe('P2 case initiation', () => {
     first.unmount();
 
     open('/police/cases/new');
-   await screen.findByLabelText('Incident Title');
-    expect(await screen.findByDisplayValue('Market theft')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Sac volé')).toBeInTheDocument();
+    await screen.findByRole('heading', { level: 2, name: 'Participant Registration' });
     expect(screen.getAllByLabelText('Full Name').map((i) => i.value)).toEqual(['Jean Doe', 'Rose']);
-    expect(screen.getByRole('checkbox')).toBeChecked();
+    expect(screen.getAllByRole('checkbox')[0]).toBeChecked();
+    fireEvent.click(button('Previous'));
+    expect(screen.getByLabelText('Incident Narrative')).toHaveValue('Sac volé at the market');
   });
 
   test('cancel discards the draft, and logging out clears all drafts', async () => {
     signIn();
     mockApi({ 'POST /api/auth/logout': {} });
     open('/police/cases/new');
-    await screen.findByLabelText('Incident Title');
-    type('Incident Title', 'Temporary');
+    await toParticipants();
     fireEvent.click(button('Cancel'));
     await screen.findByRole('heading', { name: 'Case Dashboard' });
     fireEvent.click(within(screen.getByRole('complementary')).getByRole('link', { name: 'Log New Case' }));
